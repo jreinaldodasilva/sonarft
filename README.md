@@ -6,7 +6,7 @@ Version: 1.0.0.0
 
 Initial Date: March 18, 2023
 
-Last Update: June 28, 2023, 14:36
+Last Update: July 2025
 
 ## Overview
 
@@ -28,47 +28,121 @@ SonarFT is a versatile trading bot, suitable for both multi-market, cross-exchan
 
 SonarFT employs a modular architecture, diligently incorporating design patterns and clean coding principles. Utilizing the Python language and encapsulating the Object-Oriented Programming (OOP) paradigm, it manifests classes assigned with distinct responsibilities. For clarity and easy maintenance, each class is preserved in a separate file, thereby promoting a structure that is coherent, manageable, and easily modifiable.
 
-The present structure of SonarFT incorporates 10 Python classes, each located within their dedicated Python files.
+The present structure of SonarFT incorporates 14 Python classes across 12 dedicated files.
 
-They include:
+```
+sonarft/
+├── sonarft.py                  # Entry point: starts uvicorn/FastAPI server
+├── sonarft_server.py           # HTTP + WebSocket server, client communication layer
+├── sonarft_manager.py          # BotManager: lifecycle management for multiple bots
+├── sonarft_bot.py              # SonarftBot: bot init, config loading, module wiring
+├── sonarft_search.py           # Trade search: SonarftSearch, TradeProcessor, TradeValidator, TradeExecutor
+├── sonarft_prices.py           # Price calculation: VWAP, weighted adjustment, spread logic
+├── sonarft_indicators.py       # Technical indicators: RSI, MACD, StochRSI, SMA, volatility
+├── sonarft_math.py             # Trade profit/fee calculations
+├── sonarft_execution.py        # Order execution (real and simulated)
+├── sonarft_validators.py       # Liquidity and spread threshold validation
+├── sonarft_api_manager.py      # Exchange API abstraction (WebSocket/ccxt)
+├── sonarft_helpers.py          # Utility/helper functions, Trade dataclass
+├── sonarftdata/                # Configuration and runtime data
+│   ├── config.json
+│   ├── config_parameters.json
+│   ├── config_exchanges.json
+│   ├── config_symbols.json
+│   ├── config_fees.json
+│   ├── config_indicators.json
+│   ├── config_markets.json
+│   ├── config/                 # Per-client runtime config
+│   └── history/                # Per-bot trade and order history
+└── models/
+    ├── ga.cpp                  # Genetic algorithm model (C++)
+    ├── mp.cpp                  # Additional C++ model
+    └── generator.java          # Java test case generator
+```
 
-**Initiator Classes** : Initiation is the starting point of any operation. These classes are the genesis of a bot's lifecycle, tasked with initializing a bot instance, bootstrapping necessary parameters and configurations, and setting the stage for the execution of the selected strategy.
+The classes and their responsibilities are:
 
- **Strategy Classes** : Strategy forms the heart of any trading operation. In SonarFT, these classes play a central role by encapsulating specific trading strategies. They embody the decision-making logic that drives the bot's trading behavior.
+| Class | File | Role |
+|---|---|---|
+| SonarftServer | sonarft_server.py | FastAPI app, HTTP endpoints, WebSocket handler, per-client logging |
+| AsyncHandler | sonarft_server.py | Async log handler streaming logs to WebSocket clients |
+| ClientIdFilter | sonarft_server.py | Injects client_id into log records |
+| TaskManager | sonarft_server.py | Context manager for async task lifecycle |
+| BotManager | sonarft_manager.py | Create/run/remove bot instances, client-to-bot mapping |
+| SonarftBot | sonarft_bot.py | Config loading, module initialization, main run loop |
+| SonarftSearch | sonarft_search.py | Orchestrates trade search across symbols concurrently |
+| TradeProcessor | sonarft_search.py | Per-symbol price fetching, adjustment, profit check, execution trigger |
+| TradeValidator | sonarft_search.py | Liquidity and spread validation before execution |
+| TradeExecutor | sonarft_search.py | Async task management for trade execution |
+| SonarftPrices | sonarft_prices.py | VWAP, weighted price adjustment, dynamic volatility, support/resistance |
+| SonarftIndicators | sonarft_indicators.py | RSI, MACD, StochRSI, SMA, market direction/trend/movement |
+| SonarftMath | sonarft_math.py | Profit/fee calculation, trade data packaging |
+| SonarftExecution | sonarft_execution.py | Buy/sell order placement (real or simulated) |
+| SonarftValidators | sonarft_validators.py | Order book liquidity depth checks, spread threshold |
+| SonarftApiManager | sonarft_api_manager.py | Exchange API calls (WebSocket default, ccxt fallback) |
+| SonarftHelpers | sonarft_helpers.py | Formatting, file I/O, trade/order history persistence |
 
- **Strategy Support Classes** : Support is the backbone of any effective system. These classes provide essential utility and calculation functions that aid in implementing the trading strategies. They supply necessary inputs and perform ancillary tasks to support the primary strategy operations.
+The classes are organized into the following layers:
 
- **API Management Classes** : Smooth interaction with external systems is crucial in trading. These classes manage all API communication aspects, including sending requests, handling responses, and managing data. They serve as the link between SonarFT and the outside world, particularly the trading platforms.
+**Initiator Classes** : Initiation is the starting point of any operation. These classes are the genesis of a bot's lifecycle, tasked with initializing a bot instance, bootstrapping necessary parameters and configurations, and setting the stage for the execution of the selected strategy. (`SonarftServer`, `BotManager`, `SonarftBot`)
 
- **Mathematical Classes** : Precision is paramount in financial calculations. These classes house all the mathematical functions and algorithms used in market analysis, strategy formulation, and profit calculation. They maintain the precision and accuracy of the bot's operations.
+**Strategy Classes** : Strategy forms the heart of any trading operation. In SonarFT, these classes play a central role by encapsulating specific trading strategies. They embody the decision-making logic that drives the bot's trading behavior. (`SonarftSearch`, `TradeProcessor`, `TradeValidator`, `TradeExecutor`)
 
- **General Helper Classes** : These classes are the multitaskers of SonarFT. They perform a variety of functions that assist in the overall functioning of the bot. From data formatting to logging activities, they fill in the gaps in the bot's operational framework.
+**Strategy Support Classes** : Support is the backbone of any effective system. These classes provide essential utility and calculation functions that aid in implementing the trading strategies. They supply necessary inputs and perform ancillary tasks to support the primary strategy operations. (`SonarftPrices`, `SonarftIndicators`, `SonarftMath`)
+
+**API Management Classes** : Smooth interaction with external systems is crucial in trading. These classes manage all API communication aspects, including sending requests, handling responses, and managing data. They serve as the link between SonarFT and the outside world, particularly the trading platforms. (`SonarftApiManager`)
+
+**General Helper Classes** : These classes are the multitaskers of SonarFT. They perform a variety of functions that assist in the overall functioning of the bot. From data formatting to logging activities, they fill in the gaps in the bot's operational framework. (`SonarftExecution`, `SonarftValidators`, `SonarftHelpers`)
 
 ### Usage
 
+#### Installing Dependencies
+
+```shell
+~/sonarft$ pip install -r requirements.txt
+```
+
 #### Launching the Bot
 
-To execute the SonarFT server, run `./dist/sonarft/sonarft` (linux). This process initiate the sonarft server.
+To run the server directly with Python:
+
+```shell
+~/sonarft$ python sonarft.py
+```
+
+To execute the compiled SonarFT binary (Linux):
+
+```shell
+~/sonarft$ ./dist/sonarft/sonarft
+```
 
 #### Configuring Parameters and Settings
 
-Initial parameters and configurations are defined in these files: `config_parameters.json`, `config_exchanges.json`, `config_symbols.json`, `config_fees.json` and `config.json`.
+Initial parameters and configurations are defined in these files: `config_parameters.json`, `config_exchanges.json`, `config_symbols.json`, `config_fees.json`, `config_indicators.json`, `config_markets.json` and `config.json`.
 
 To customize your configuration, either select an existing configuration from `config.json` or create your own within that file.
 
-The default `config_1` uses the following files: `parameters_1` (parameters_setup = 1), `exchanges_1` (exchanges_setup = 1), `symbols_1` (symbols_setup = 1), and `exchanges_fees_1` (fees_setup = 1).
+The default `config_1` uses the following files: `parameters_1` (parameters_setup = 1), `exchanges_1` (exchanges_setup = 1), `symbols_1` (symbols_setup = 1), `indicators_1` (indicators_setup = 1), and `exchanges_fees_1` (fees_setup = 1).
 
 For example, to use a different configuration:
 
 ```shell
-~/sonarft$ ./dist/sonarft_bot/sonarft_bot -c config_2
+~/sonarft$ ./dist/sonarft/sonarft -c config_2
 
-~/sonarft$ ./dist/sonarft_bot/sonarft_bot -c config_10
+~/sonarft$ ./dist/sonarft/sonarft -c config_10
 ```
 
-Note: Use the `-c (`--config `)` flag before specifying the configuration.
+Note: Use the `-c` (`--config`) flag before specifying the configuration.
 
 To create a new configuration, refer to each configuration file for available options. To add a new exchange, symbol, parameters, or fees, simply include them in their respective files. Subsequently, create the new configuration in `config.json`.
+
+Key default parameters (`config_parameters.json`):
+
+| Parameter | Default | Description |
+|---|---|---|
+| `profit_percentage_threshold` | 0.0001 | Minimum profit percentage (0.01%) required to execute a trade |
+| `trade_amount` | 1 | Trade amount in base currency units |
+| `is_simulating_trade` | 1 | Simulation mode on by default — no real orders are placed |
 
 #### Modifying the API
 
@@ -78,9 +152,38 @@ Change the default API by running the bot with the `-l` (`--library`) flag.
 ~/sonarft$ ./dist/sonarft/sonarft -c config_2 -l ccxt
 ```
 
-The ccxt API uses REST technology for communication, unlike the default WEBSOCKET. Although WEBSOCKET is faster and more secure, it's not available for all supported exchanges.
+The ccxt API uses REST technology for communication, unlike the default WebSocket (ccxtpro). Although WebSocket is faster and lower latency, it's not available for all supported exchanges.
 
 Note: You can run multiple instances of the bot concurrently. Each instance is a separate bot with its own states and behaviors, defined by its classes. These classes act as "blueprints" for the creation of objects.
+
+#### REST API Endpoints
+
+The SonarFT server exposes the following HTTP endpoints:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/botids/{client_id}` | List all bot IDs associated with a client |
+| GET | `/default_parameters` | Retrieve default trading parameters |
+| GET | `/default_indicators` | Retrieve default indicator settings |
+| GET | `/bot/get_parameters/{client_id}` | Get per-client trading parameters |
+| POST | `/bot/set_parameters/{client_id}` | Update per-client trading parameters |
+| GET | `/bot/get_indicators/{client_id}` | Get per-client indicator settings |
+| POST | `/bot/set_indicators/{client_id}` | Update per-client indicator settings |
+| GET | `/bot/{botid}/orders` | Retrieve order history for a bot |
+| GET | `/bot/{botid}/trades` | Retrieve trade history for a bot |
+
+WebSocket connections are handled at `/ws/{client_id}`. Supported WebSocket actions: `create`, `run`, `remove`.
+
+#### Docker Deployment
+
+Build and run with Docker Compose (includes Traefik reverse proxy with TLS):
+
+```shell
+~/sonarft$ docker build -t sonarftbot:latest .
+~/sonarft$ docker-compose up
+```
+
+The bot is served on port 5000, routed through Traefik at `sonarft.com`. The Traefik dashboard is available at `monitor.sonarft.com:8080`.
 
 ### Core Mechanisms
 
@@ -101,7 +204,7 @@ For calculating the VWAP for the buy side, data from the bid side of the order b
 This method ensures that the trading bot begins operations within a price range that aligns with the prevailing market conditions and volume. This strategic positioning enhances its ability to identify and seize profitable trading opportunities.
 
 ```python
-def get_weighted_buy_and_sell_prices(self, depth: int, order_book: Dict) -> Tuple[float, float]:
+def get_weighted_prices(self, depth: int, order_book: Dict) -> Tuple[float, float]:
     """
     Calculate the volume-weighted average buy (bid) and sell (ask) prices.
 
@@ -129,16 +232,40 @@ def get_weighted_buy_and_sell_prices(self, depth: int, order_book: Dict) -> Tupl
 
 In the Python function provided above, the volume-weighted average buy (bid) and sell (ask) prices are calculated. This function is fundamental for the initialization of trading prices.
 
-#### Adjusting trading prices
+#### Adjusting Trading Prices
 
 Once the initial prices have been set, the next crucial step is to adjust the prices. The purpose of this adjustment is to increase the profitability potential of the trading bot while ensuring that the adjusted prices remain within a reasonable range for the execution of buy and sell orders.
 
-The rebalancing process takes into account various market dynamics such as volatility, trend and direction, and includes parameters such as volume weighting, spread widening factor and spread narrowing factor. The aim is to capitalise on market fluctuations and enable the bot to secure profitable trading positions.
+The price adjustment process (`weighted_adjust_prices`) takes into account a comprehensive set of market dynamics:
 
-#### Validating the price difference and covering trading fees
+- **Market direction** — determined via Simple Moving Average (SMA) or Exponential Moving Average (EMA), returning `'bull'`, `'bear'`, or `'neutral'`
+- **Short-term market trend** — calculated from recent OHLCV close price changes over a configurable window
+- **RSI (Relative Strength Index)** — identifies overbought (≥ 70) and oversold (≤ 30) conditions
+- **Stochastic RSI** — provides %K and %D crossover signals to refine entry/exit timing
+- **MACD** — used in dynamic volatility adjustment to weight the influence of trend signals
+- **Volatility** — computed from order book mid-price standard deviation, then scaled by a dynamic adjustment factor
+- **Support and resistance levels** — derived from historical high/low prices; adjusted prices are clamped within these bounds
+- **Spread factors** — a spread increase factor and spread decrease factor are applied based on the combined bull/bear direction and trend signals to widen or narrow the bid/ask spread for profit capture
 
-After price matching, it is necessary to validate the profitability potential of the set prices. Specifically, we need to ensure that the difference between the adjusted buy and sell prices is sufficient to cover the trading fees on both sides of the transaction.
+The final adjusted prices are computed as a weighted blend of the target VWAP price and the current order book weighted price, with the weight determined by volatility and market strength.
+
+#### Validating the Price Difference and Covering Trading Fees
+
+After price adjustment, it is necessary to validate the profitability potential of the set prices. Specifically, we need to ensure that the difference between the adjusted buy and sell prices is sufficient to cover the trading fees on both sides of the transaction.
 
 Trading fees, which are inherent in all trading platforms, must be taken into account to ensure that the bot's activities result in a net positive return. This validation step aims to avoid transactions where the trading fees incurred outweigh the profit potential, thereby preventing the bot from engaging in unprofitable trades.
 
-These initial steps lay the groundwork for the SonarFT bot to function effectively, respond to market changes, execute trades profitably and ensure that it operates within a range suitable for its trading strategy. Further steps will follow, each of which will play a crucial role in the bot's operation and performance.
+Fee and profit calculations are performed by `SonarftMath.calculate_trade`, which applies per-exchange precision rules (defined in `EXCHANGE_RULES`) for price rounding, amount rounding, and fee calculation. Supported exchanges include `okx`, `bitfinex`, and `binance`.
+
+#### Trade Validation and Execution
+
+Before a trade is executed, `TradeValidator` performs two additional checks in parallel:
+
+1. **Liquidity depth verification** — confirms the order book on both the buy and sell exchanges has sufficient depth and volume to absorb the trade amount without excessive slippage
+2. **Spread threshold verification** — computes a dynamic spread threshold based on historical data and current volatility classification (`Low`, `Medium`, `High`), and verifies the current spread ratio falls within acceptable bounds
+
+If all validations pass, `TradeExecutor` dispatches the trade asynchronously via `SonarftExecution`, which determines the trade position (`LONG` or `SHORT`) based on market direction and RSI/StochRSI signals, then places limit orders on the respective exchanges. In simulation mode (`is_simulating_trade = 1`), no real orders are placed — order IDs and amounts are generated synthetically.
+
+Trade and order history are persisted to `sonarftdata/history/{botid}_orders.json` and `sonarftdata/history/{botid}_trades.json`.
+
+These steps lay the groundwork for the SonarFT bot to function effectively, respond to market changes, execute trades profitably and ensure that it operates within a range suitable for its trading strategy.
