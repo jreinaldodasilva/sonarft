@@ -1,8 +1,9 @@
 """
+SonarFT Search Module
+Orchestrates trade search, validation, and execution dispatch across symbols.
 """
 import logging
 import asyncio
-from decimal import getcontext
 from typing import Optional, Dict, List
 
 from sonarft_math import SonarftMath
@@ -10,7 +11,6 @@ from sonarft_prices import SonarftPrices
 from sonarft_validators import SonarftValidators
 from sonarft_execution import SonarftExecution
 
-getcontext().prec = 8
 
 class TradeValidator:
     """
@@ -61,11 +61,13 @@ class TradeExecutor:
     """
 
     def __init__(self, sonarft_execution: SonarftExecution, logger=None):
-        """
-        """
         self.sonarft_execution = sonarft_execution
         self.logger = logger or logging.getLogger(__name__)
         self.trade_tasks = []
+        self.monitor_task = None
+
+    async def start(self):
+        """Start the background monitor task. Must be called from an async context."""
         self.monitor_task = asyncio.create_task(self.monitor_trade_tasks())
 
     def execute_trade(self, botid, trade_data: Dict) -> None:
@@ -76,22 +78,15 @@ class TradeExecutor:
         self.trade_tasks.append(trade_task)
 
     async def monitor_trade_tasks(self):
-        """
-        """
         while True:
-            # Remove completed tasks from the list and handle any exceptions they raised
-            self.trade_tasks = [task for task in self.trade_tasks if not task.done()]
-            for task in self.trade_tasks:
-                if task.done():
-                    try:
-                        result = (
-                            task.result()
-                        )  # This will re-raise any exceptions the task may have raised
-                        self.logger.info(f"\n Result {result}")
-                    except Exception as e:
-                        self.logger.error(f"Trade task raised an exception: {e}")
-                        # Here you can add any additional error handling
-            await asyncio.sleep(1)  # Sleep for a while before checking again
+            done_tasks = [t for t in self.trade_tasks if t.done()]
+            self.trade_tasks = [t for t in self.trade_tasks if not t.done()]
+            for task in done_tasks:
+                try:
+                    self.logger.info(f"Trade task result: {task.result()}")
+                except Exception as e:
+                    self.logger.error(f"Trade task raised an exception: {e}")
+            await asyncio.sleep(1)
 
     def cancel_trade(self, botid):
         # Cancel the task for the given botid
@@ -111,16 +106,20 @@ class TradeProcessor:
         logger=None,
     ):
         self.logger = logger or logging.getLogger(__name__)
-
         self.sonarft_math = sonarft_math
         self.sonarft_prices = sonarft_prices
-
         self.trade_validator = TradeValidator(sonarft_validators, logger)
         self.trade_executor = TradeExecutor(sonarft_execution, logger)
 
-    async def process_symbol(
-        self, botid, symbol, trade_amount, percentage_threshold
-    ):
+    async def start(self):
+        """Start background tasks. Must be called from an async context."""
+        await self.trade_executor.start()
+
+    async def process_symbol(self, botid, symbol, trade_amount, percentage_threshold):
+        if trade_amount <= 0:
+            self.logger.warning(f"Bot {botid}: trade_amount {trade_amount} is invalid, skipping symbol")
+            return
+
         self.logger.info(f"(v1009) - Bot {botid}: NEW TRADE SEARCHING...")
         self.logger.info(
             "-----------------------------------------------------------\n"
@@ -167,10 +166,10 @@ class TradeProcessor:
         buy_exchange, buy_price, buy_ask, latest_buy_price, _ = buy_price_list
         sell_exchange, sell_bid, sell_price, latest_sell_price, _ = sell_price_list
 
-        # Adjust prices to get average weighted buy and sell prices from the orders book
         (
             adjusted_buy_price,
             adjusted_sell_price,
+            indicators,
         ) = await self.sonarft_prices.weighted_adjust_prices(
             botid,
             buy_exchange,
@@ -192,8 +191,6 @@ class TradeProcessor:
             *sell_price_list[3:],
         )
 
-        # Calculate if the trade buy and sell prices have enough profit to cover the fees
-        # It also returns a dictionary (trade_data) with the trade info for execution if the conditions met in the next steps
         profit, profit_percentage, trade_data = self.sonarft_math.calculate_trade(
             adjusted_buy_price,
             adjusted_sell_price,
@@ -203,6 +200,9 @@ class TradeProcessor:
             base,
             quote,
         )
+
+        if trade_data is not None:
+            trade_data.update(indicators)
 
         # Information about the trade
         self.logger.info(f"{base}/{quote}: Trade Amount {trade_amount}")
@@ -247,8 +247,8 @@ class TradeProcessor:
 
 class SonarftSearch:
     """
-    SonarftSearch class is responsible for find healthy trades and execute them the fastest way possible
-    A healthy trade is a profitable trade with the lowest risk and the highest probability of successfull execution
+    SonarftSearch class is responsible for finding healthy trades and executing them.
+    A healthy trade is a profitable trade with the lowest risk and the highest probability of successful execution.
     """
 
     def __init__(
@@ -262,6 +262,7 @@ class SonarftSearch:
         profit_percentage_threshold: float,
         is_simulating_trade: bool,
         logger=None,
+        max_daily_loss: float = 0.0,
     ):
         self.logger = logger or logging.getLogger(__name__)
 
@@ -273,31 +274,43 @@ class SonarftSearch:
         self.symbols = symbols
         self.profit_percentage_threshold = profit_percentage_threshold
         self.is_simulating_trade = is_simulating_trade
+        self.max_daily_loss = max_daily_loss
+        self.daily_loss_accumulated = 0.0
 
         self.latest_executed_buy_price_order = []
 
-    # ### Entry Point for Searching ********************************
-    async def search_trades(self, botid) -> Optional[List[Dict]]:
-        """
-        Search for the best trades for the given symbols and trade amounts.
-        """
-        # Main loop
-        futures = [self.trade_processor.process_symbol(botid, symbol, self.trade_amount, self.profit_percentage_threshold) for symbol in self.symbols]
+    async def start(self):
+        """Start background tasks. Must be called once from an async context after construction."""
+        await self.trade_processor.start()
+
+    def record_trade_result(self, profit: float):
+        """Accumulate profit/loss. Call after each completed trade."""
+        if profit < 0:
+            self.daily_loss_accumulated += abs(profit)
+
+    def is_halted(self) -> bool:
+        """Returns True if the daily loss limit has been reached."""
+        if self.max_daily_loss > 0 and self.daily_loss_accumulated >= self.max_daily_loss:
+            self.logger.warning(
+                f"Daily loss limit reached: {self.daily_loss_accumulated} >= {self.max_daily_loss}. Halting trades."
+            )
+            return True
+        return False
+
+    async def search_trades(self, botid) -> None:
+        """Search for the best trades for the given symbols and trade amounts."""
+        if self.is_halted():
+            return
+
+        futures = [
+            self.trade_processor.process_symbol(
+                botid, symbol, self.trade_amount, self.profit_percentage_threshold
+            )
+            for symbol in self.symbols
+        ]
         results = await asyncio.gather(*futures, return_exceptions=True)
 
-        for idx, result in enumerate(results):
-           if isinstance(result, Exception):
-               self.logger.error(f"Error while searching for trades: {result}\n")
-               continue
-
-        #futures = [self.trade_processor.process_symbol(botid, self.symbol, self.trade_amount, self.profit_percentage_threshold)]
-        #results = await asyncio.gather(*futures, return_exceptions=True)
-
-        
-        #result = await self.trade_processor.process_symbol(
-        #    botid, self.symbol, self.trade_amount, self.profit_percentage_threshold
-        #)
-
-        #if isinstance(result, Exception):
-        #    self.logger.error(f"Error while searching for trades: {result}\\n")
+        for result in results:
+            if isinstance(result, Exception):
+                self.logger.error(f"Error while searching for trades: {result}\n")
 

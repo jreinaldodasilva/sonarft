@@ -1,12 +1,10 @@
 # UTILITIES FUNCTIONS ******************************************************
 from dataclasses import dataclass
-from decimal import getcontext
 import json
 import os
 import logging
 import time
 
-getcontext().prec = 8
 
 @dataclass
 class Trade:
@@ -29,6 +27,15 @@ class Trade:
     sell_fee_quote: float
     profit: float
     profit_percentage: float
+    # Pre-computed indicators passed from price adjustment to avoid re-fetch at execution
+    market_direction_buy: str = None
+    market_direction_sell: str = None
+    market_rsi_buy: float = None
+    market_rsi_sell: float = None
+    market_stoch_rsi_buy_k: float = None
+    market_stoch_rsi_buy_d: float = None
+    market_stoch_rsi_sell_k: float = None
+    market_stoch_rsi_sell_d: float = None
 
 class SonarftHelpers:
     """
@@ -101,11 +108,7 @@ class SonarftHelpers:
             'profit_percentage': trade.profit_percentage
         }
         
-        if self.is_simulation_mode:
-            pathname = str(botid) + "_" + "orders" + ".json"
-        else: 
-            pathname = str(botid) + "_" + "orders" + ".json"
-
+        pathname = str(botid) + "_orders.json"
         self.save_order_data(pathname, trade_info)
         
     def save_trade_data(self, pathname, trade_info):
@@ -164,16 +167,7 @@ class SonarftHelpers:
             'trade_success': trade_success
         }
         
-        if self.is_simulation_mode:
-            pathname = str(botid) + "_" + "trades" + ".json"
-        else: 
-            pathname = str(botid) + "_" + "trades" + ".json"
-        
-        #if self.is_simulation_mode:
-        #    pathname = self.botid + "_" + "trade_history" + "_" + trade.buy_exchange + "_" + trade.base + trade.quote + "_" + "SIM" + ".json"    
-        #else:
-        #    pathname = self.botid + "_" + "trade_history" + "_" + trade.buy_exchange + "_" + trade.base + trade.quote + ".json"
-
+        pathname = str(botid) + "_trades.json"
         self.save_trade_data(pathname, trade_info)
 
     def save_error(self, error_info):

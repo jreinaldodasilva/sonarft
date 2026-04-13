@@ -3,11 +3,9 @@ Sonarft Bot Control
 """
 import os
 import json
-import time
 import random
 import asyncio
 import logging
-from decimal import getcontext
 from typing import Dict, List, Tuple
 
 from sonarft_api_manager import SonarftApiManager
@@ -19,7 +17,6 @@ from sonarft_prices import SonarftPrices
 from sonarft_execution import SonarftExecution
 from sonarft_search import SonarftSearch
 
-getcontext().prec = 8
 
 
 # ### SonarftBot Class - ##########################################
@@ -38,7 +35,8 @@ class SonarftBot:
         self.logger = logger or logging.getLogger(__name__)
         self.library = library
         self.api_manager = None
-        self.stop_bot_flag = False
+        self.stop_bot_flag = False  # kept for BotManager.run_bot reset
+        self._stop_event = asyncio.Event()
         self.botid = 0
 
     async def create_bot(self, config_setup: str):
@@ -54,7 +52,9 @@ class SonarftBot:
             self.stop_bot_flag = False
 
             self.botid = self.create_botid()
-            self.save_botid(self.botid)
+            botid_path = os.path.join("sonarftdata", "bots", f"{self.botid}.json")
+            with open(botid_path, "w") as f:
+                json.dump({"botid": self.botid}, f)
 
             self.logger.info("Initializing Bot manager module...")
 
@@ -73,8 +73,8 @@ class SonarftBot:
             self.logger.info("Initializing Bot modules...")
             await self.InitializeModules()
 
-            # self.logger.info(f"Loading markets...")
-            # await self.api_manager.load_markets()
+            self.logger.info("Loading markets...")
+            await self.api_manager.load_all_markets()
 
             self.logger.info("Bot %s has been created!", self.botid)
         except BotCreationError as error:
@@ -84,23 +84,53 @@ class SonarftBot:
         return self.botid
 
     async def run_bot(self):
-        # Main loop that holds the bot code running
         self.logger.info(f"Bot {self.botid} start running")
+        consecutive_failures = 0
+        max_failures = 5
+        base_backoff = 30  # seconds
         try:
-            while True:
-                await self.sonarft_search.search_trades(self.botid)
-                if self.stop_bot_flag:
-                    return
+            while not self._stop_event.is_set():
+                try:
+                    await self.sonarft_search.search_trades(self.botid)
+                    consecutive_failures = 0
+                except Exception as e:
+                    consecutive_failures += 1
+                    backoff = base_backoff * consecutive_failures
+                    self.logger.error(
+                        f"Bot {self.botid}: search error ({consecutive_failures}/{max_failures}): {e}. "
+                        f"Backing off {backoff}s."
+                    )
+                    if consecutive_failures >= max_failures:
+                        self.logger.error(
+                            f"Bot {self.botid}: circuit breaker tripped after {max_failures} consecutive failures. Stopping."
+                        )
+                        self._stop_event.set()
+                        break
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.shield(self._stop_event.wait()),
+                            timeout=backoff
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
+
+                if self._stop_event.is_set():
+                    break
 
                 timesleep_size = random.randint(6, 18)
                 self.logger.info(
                     f"Next trade for bot {self.botid} in {timesleep_size} secs..."
                 )
-
-                await asyncio.sleep(timesleep_size)
-
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._stop_event.wait()),
+                        timeout=timesleep_size
+                    )
+                except asyncio.TimeoutError:
+                    pass
         except Exception as e:
-            self.logger.error(f"Error: {e}")
+            self.logger.error(f"Fatal error in run_bot: {e}")
 
     def setAPIKeys(self, exchange: str, api_key: str, secret_key: str, password: str):
         """
@@ -114,54 +144,19 @@ class SonarftBot:
         self.api_manager.setAPIKeys(exchange, api_key, secret_key, password)
 
     def create_botid(self) -> int:
-        """
-        Creates a unique bot id.
-        Returns:
-            int: The unique bot id.
-        """
         self.logger.info("Creating Bot ID...")
-        t = round(time.time())
-        n = random.randint(10001, 99999)
-        botid = n
-        return botid
-
-    def save_botid(self, botid: int):
-        """
-        Saves the bot id to a json file.
-        Args:
-            botid (int): The unique bot id.
-        """
-        self.logger.info("Saving Bot ID...")
-        pathname = str(botid) + ".json"
-        file_name = os.path.join("sonarftdata", "bots", pathname)
-        data = {"botid": botid}
-        with open(file_name, "w") as file:
-            json.dump(data, file)
-
-    def get_botid(self) -> int:
-        """
-        Returns the bot id.
-        Returns:
-            int: The unique bot id.
-        """
-        return self.botid
+        return random.randint(10001, 99999)
 
     async def stop_bot(self):
         """
-        Sets the stop_bot_flag to True and then waits for the bot to stop.
+        Signals the bot to stop and waits for the run loop to exit cleanly.
         """
+        self._stop_event.set()
         self.stop_bot_flag = True
-        while self.stop_bot_flag:
-            await asyncio.sleep(1)
-        self.logger.info(f"Bot {self.botid} has stopped.")
+        self.logger.info(f"Bot {self.botid} stop signal sent.")
 
     # ### loaders *****************************************************
     def load_configurations(self, config_setup: str = "config_1"):
-        """
-        Loads the configuration data from the config.json file.
-        Args:
-            config_setup (str): The configuration setup to load.
-        """
         pathname = "sonarftdata/config.json"
         with open(pathname, "r") as f:
             loadconfig = json.load(f)
@@ -171,14 +166,18 @@ class SonarftBot:
             config["markets_pathname"], config["markets_setup"]
         )
 
-        # if self.market == "crypto":
         (
             self.profit_percentage_threshold,
             self.trade_amount,
             self.is_simulating_trade,
+            self.max_daily_loss,
+            self.spread_increase_factor,
+            self.spread_decrease_factor,
         ) = self.load_parameters(
             config["parameters_pathname"], config["parameters_setup"]
         )
+        self._validate_parameters()
+
         self.symbols = self.load_symbols(
             config["symbols_pathname"], config["symbols_setup"]
         )
@@ -188,6 +187,21 @@ class SonarftBot:
         self.exchanges_fees = self.load_fees(
             config["fees_pathname"], config["fees_setup"]
         )
+
+    def _validate_parameters(self):
+        """Raise ValueError early if any trading parameter is out of safe range."""
+        if not (0 < self.profit_percentage_threshold < 1):
+            raise ValueError(f"profit_percentage_threshold must be between 0 and 1, got {self.profit_percentage_threshold}")
+        if self.trade_amount <= 0:
+            raise ValueError(f"trade_amount must be positive, got {self.trade_amount}")
+        if self.is_simulating_trade not in (0, 1):
+            raise ValueError(f"is_simulating_trade must be 0 or 1, got {self.is_simulating_trade}")
+        if self.max_daily_loss < 0:
+            raise ValueError(f"max_daily_loss must be >= 0, got {self.max_daily_loss}")
+        if not (1.0 < self.spread_increase_factor < 1.01):
+            raise ValueError(f"spread_increase_factor must be between 1.0 and 1.01, got {self.spread_increase_factor}")
+        if not (0.99 < self.spread_decrease_factor < 1.0):
+            raise ValueError(f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}")
 
     def load_markets(self, markets_pathname: str, markets_setup: str) -> str:
         """
@@ -222,7 +236,14 @@ class SonarftBot:
         self.logger.info(
             f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters.items())}"
         )
-        return tuple(parameters.values())
+        return (
+            parameters['profit_percentage_threshold'],
+            parameters['trade_amount'],
+            parameters['is_simulating_trade'],
+            parameters.get('max_daily_loss', 0.0),
+            parameters.get('spread_increase_factor', 1.00072),
+            parameters.get('spread_decrease_factor', 0.99936),
+        )
 
     def load_exchanges(self, exchanges_pathname: str, exchanges_setup: str) -> List:
         """
@@ -295,6 +316,8 @@ class SonarftBot:
         self.sonarft_prices = SonarftPrices(
             self.api_manager, self.sonarft_indicators, self.logger
         )
+        self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
+        self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.logger.info(f"Initializing Prices module OK")
 
         self.logger.info(f"Initializing Execution module...")
@@ -318,7 +341,9 @@ class SonarftBot:
             self.profit_percentage_threshold,
             self.is_simulating_trade,
             self.logger,
+            max_daily_loss=self.max_daily_loss,
         )
+        await self.sonarft_search.start()
         self.logger.info(f"Initializing Search module OK")
 
 class BotCreationError(Exception):

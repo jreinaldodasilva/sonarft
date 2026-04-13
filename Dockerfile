@@ -1,19 +1,18 @@
 # Use a base image that includes Python and necessary dependencies
 FROM python:3.10.6
 
-# Create a group and user to avoid running as root
-#RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-# Change to the new user
-#USER appuser
+# Create a non-root user and group
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 # Set the working directory inside the container
 WORKDIR /app
 
 # Create additional folders in the container
-RUN mkdir sonarftdata
-RUN mkdir sonarftdata/history
-RUN mkdir sonarftdata/bots
-RUN mkdir sonarftdata/config
+RUN mkdir sonarftdata \
+    && mkdir sonarftdata/history \
+    && mkdir sonarftdata/bots \
+    && mkdir sonarftdata/config \
+    && chown -R appuser:appgroup /app
 
 # Copy config files into the container
 COPY sonarftdata/config/parameters.json /app/sonarftdata/config/parameters.json
@@ -42,10 +41,14 @@ COPY sonarft_indicators.py /app/sonarft_indicators.py
 COPY sonarft_search.py /app/sonarft_search.py
 COPY sonarft_execution.py /app/sonarft_execution.py
 
-COPY .env /app/.env
+# .env is NOT copied — inject secrets at runtime via Docker environment variables
+# COPY .env /app/.env
 
-COPY requirements.txt /app/requirements.txt    
+COPY requirements.txt /app/requirements.txt
 RUN pip install -r requirements.txt
+
+# Switch to non-root user before running
+USER appuser
 
 EXPOSE 5000
 

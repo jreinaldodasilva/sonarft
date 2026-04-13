@@ -1,19 +1,43 @@
 """
-Sonarft Communication Module
+SonarFT Communication Module
 Interface between the Web App and Trading Bot
 """
+import os
+import re
 import json
 import logging
 import asyncio
-from typing import Dict, List
+from collections import deque
+from typing import Dict, List, Optional
 from starlette.websockets import WebSocketDisconnect
-from fastapi import Request
+from fastapi import Request, Depends
 from fastapi import HTTPException, Body
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, WebSocket
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from sonarft_manager import BotManager
+
+_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+
+# Load API token from environment — set SONARFT_API_TOKEN before starting the server.
+# If not set, authentication is disabled (development mode only).
+_API_TOKEN: Optional[str] = os.environ.get("SONARFT_API_TOKEN")
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+def _require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme)) -> None:
+    """Dependency: reject requests that do not carry the correct Bearer token."""
+    if not _API_TOKEN:
+        return  # auth disabled — no token configured
+    if credentials is None or credentials.credentials != _API_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+def _validate_id(value: str, label: str = "identifier") -> str:
+    """Raise HTTP 400 if value contains path traversal or invalid characters."""
+    if not _ID_PATTERN.match(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return value
 
 
 # ### SonarftServer Class - ##########################################
@@ -36,24 +60,13 @@ class SonarftServer:
 
         self.app: FastAPI = FastAPI()
 
-        #self.app.add_middleware(
-        #    CORSMiddleware,
-        #    allow_origins=[
-        #        "http://localhost:3000",  # For local testing
-        #        "https://sonarft.com",  # Replace with your production front-end application's URL
-        #    ],
-        #    allow_credentials=True,
-        #    allow_methods=["GET", "POST", "PUT", "DELETE"],
-        #    allow_headers=["Authorization", "Content-Type"],
-        #)
-
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=["https://sonarft.com", "http://localhost:3000"],
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )        
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
 
         self.connections: Dict[str, WebSocket] = {}
         self.tasks: List[asyncio.Task] = []
@@ -68,11 +81,11 @@ class SonarftServer:
         """
 
         @self.app.get("/botids/{client_id}")
-        def get_botids(client_id: str):
+        def get_botids(client_id: str, _: None = Depends(_require_auth)):
             return {"botids": self.botmanager.get_botids(client_id)}
 
         @self.app.get("/default_parameters")
-        async def get_default_parameters():
+        async def get_default_parameters(_: None = Depends(_require_auth)):
             try:
                 with open(
                     "sonarftdata/config/parameters.json", "r", encoding="utf-8"
@@ -87,7 +100,7 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
 
         @self.app.get("/default_indicators")
-        async def get_default_indicators():
+        async def get_default_indicators(_: None = Depends(_require_auth)):
             try:
                 with open(
                     "sonarftdata/config/indicators.json", "r", encoding="utf-8"
@@ -102,7 +115,8 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
 
         @self.app.get("/bot/get_parameters/{client_id}")
-        async def get_bot_parameters(client_id: str):
+        async def get_bot_parameters(client_id: str, _: None = Depends(_require_auth)):
+            _validate_id(client_id, "client_id")
             try:
                 with open(
                     f"sonarftdata/config/{client_id}_parameters.json", "r", encoding="utf-8"
@@ -117,7 +131,8 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
 
         @self.app.post("/bot/set_parameters/{client_id}")
-        async def set_bot_parameters(client_id: str, new_parameters: dict = Body(...)):
+        async def set_bot_parameters(client_id: str, new_parameters: dict = Body(...), _: None = Depends(_require_auth)):
+            _validate_id(client_id, "client_id")
             try:
                 with open(f"sonarftdata/config/{client_id}_parameters.json", "w", encoding="utf-8") as write_file:
                     json.dump(new_parameters, write_file, ensure_ascii=False, indent=4)
@@ -130,7 +145,8 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
     
         @self.app.get("/bot/get_indicators/{client_id}")
-        async def get_bot_indicators(client_id: str):
+        async def get_bot_indicators(client_id: str, _: None = Depends(_require_auth)):
+            _validate_id(client_id, "client_id")
             try:
                 with open(
                     f"sonarftdata/config/{client_id}_indicators.json", "r", encoding="utf-8"
@@ -145,7 +161,8 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
 
         @self.app.post("/bot/set_indicators/{client_id}")
-        async def set_bot_indicators(client_id: str, new_indicators: dict = Body(...)):
+        async def set_bot_indicators(client_id: str, new_indicators: dict = Body(...), _: None = Depends(_require_auth)):
+            _validate_id(client_id, "client_id")
             try:
                 with open(f"sonarftdata/config/{client_id}_indicators.json", "w", encoding="utf-8") as write_file:
                     json.dump(new_indicators, write_file, ensure_ascii=False, indent=4)
@@ -158,7 +175,8 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
 
         @self.app.get("/bot/{botid}/orders")
-        async def get_bot_orders(botid: str):
+        async def get_bot_orders(botid: str, _: None = Depends(_require_auth)):
+            _validate_id(botid, "botid")
             try:
                 with open(
                     f"sonarftdata/history/{botid}_orders.json", "r", encoding="utf-8"
@@ -173,7 +191,8 @@ class SonarftServer:
                 raise HTTPException(status_code=500, detail=str(error)) from error
 
         @self.app.get("/bot/{botid}/trades")
-        async def get_bot_trades(botid: str):
+        async def get_bot_trades(botid: str, _: None = Depends(_require_auth)):
+            _validate_id(botid, "botid")
             try:
                 with open(
                     f"sonarftdata/history/{botid}_trades.json", "r", encoding="utf-8"
@@ -194,7 +213,12 @@ class SonarftServer:
         """
 
         @self.app.websocket("/ws/{client_id}")
-        async def websocket_endpoint(websocket: WebSocket, client_id: str):
+        async def websocket_endpoint(websocket: WebSocket, client_id: str, token: Optional[str] = None):
+            if _API_TOKEN and token != _API_TOKEN:
+                await websocket.close(code=1008)  # Policy Violation
+                return
+
+            _validate_id(client_id, "client_id")
             logger = self.setup_logging(client_id)
             self.botmanager.logger = logger
 
@@ -258,7 +282,7 @@ class SonarftServer:
 
             botid = event.get("botid")
             action = self.actions.get(event["key"])
-            print(f"client: {client_id} - Botid: {botid} - Action: {action}")
+            self.botmanager.logger.info(f"client: {client_id} - Botid: {botid} - Action: {action}")
 
             if action:
                 await self.perform_action(action, botid, client_id)
@@ -280,7 +304,7 @@ class SonarftServer:
         if not botid:
             botid = task
 
-        print(f"Task {task} has been created")
+        self.botmanager.logger.info(f"Task {task} has been created")
 
         with TaskManager(self.tasks):
             self.tasks.append(task)
@@ -293,35 +317,26 @@ class SonarftServer:
         client_id
         log_processor
         """
-        print(f"Client: {client_id} has been disconnected")
+        self.botmanager.logger.info(f"Client: {client_id} has been disconnected")
         if client_id in self.connections:
             del self.connections[client_id]
         log_processor.cancel()
 
     def cleanup_done_tasks(self):
-        """
-        Remove done tasks
-        """
         for task in list(self.tasks):
             if task.done():
                 exc = task.exception()
                 if exc:
-                    print(f"Task {task} raised exception: {exc}")
-                print(f"Task {task} has been removed")
+                    self.botmanager.logger.error(f"Task raised exception: {exc}")
+                self.botmanager.logger.info(f"Task {task} has been removed")
                 self.tasks.remove(task)
 
     # SonarftServer JSON
     def decode_json(self, data):
-        """
-        Decode and return json data
-
-        Parameters:
-        data
-        """
         try:
             return json.loads(data)
         except json.JSONDecodeError:
-            print(f"Failed to decode JSON: {data}")
+            self.botmanager.logger.warning(f"Failed to decode JSON: {data}")
 
     # SonarftServer LOGS
     def setup_logging(self, client_id):
@@ -355,7 +370,7 @@ class SonarftServer:
         handler = logging.getLogger(client_id).handlers[0]
         while True:
             if client_id in handler.logs and handler.logs[client_id]:
-                message: str = handler.logs[client_id].pop(0)
+                message: str = handler.logs[client_id].popleft()
                 await websocket.send_text(f"{message}")
             else:
                 await asyncio.sleep(1)
@@ -386,8 +401,8 @@ class AsyncHandler(logging.Handler):
         Initializes the AsyncHandler with a logs queue and a dictionary for per-client logs.
         """
         super().__init__()
-        self.logs_queue: asyncio.Queue = asyncio.Queue()
-        self.logs: Dict[str, List[str]] = {}  # Per-client logs
+        self.logs_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self.logs: Dict[str, deque] = {}
 
     def emit(self, record: logging.LogRecord) -> None:
         """
@@ -408,7 +423,7 @@ class AsyncHandler(logging.Handler):
         """
         log_message: str = self.format(record)
         if client_id not in self.logs:
-            self.logs[client_id] = []
+            self.logs[client_id] = deque()
         self.logs[client_id].append(log_message)
 
     async def consume_logs(self, client_id: str) -> None:
@@ -467,5 +482,4 @@ class TaskManager:
     def __exit__(self, _type, _value, _traceback):
         for task in list(self.tasks):
             if task.done():
-                print(f"Task {task} has been removed")
                 self.tasks.remove(task)

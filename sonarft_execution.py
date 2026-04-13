@@ -1,8 +1,5 @@
-# external libraries
-from decimal import getcontext
 import random
 from typing import Tuple
-import time
 import logging
 import asyncio
 
@@ -12,7 +9,6 @@ from sonarft_helpers import SonarftHelpers, Trade
 from sonarft_indicators import SonarftIndicators
 
 # used to force maximum precision 8
-getcontext().prec = 8
 
 class SonarftExecution:
     """
@@ -32,19 +28,17 @@ class SonarftExecution:
         self.is_simulation_mode = is_simulation_mode
 
     # ### Entry Point for the trade execution ********************************
-    async def execute_trade(self, botid, trade: dict) -> Tuple[bool, bool, bool]:
+    async def execute_trade(self, botid, trade: dict) -> bool:
         """
         Execute the given trade.
         """
         try:
-            # convert trade dict to Trade object
             trade_obj = Trade(**trade)
-
-            buy_order_success, sell_order_sucess, trade_sucess = await self._execute_single_trade(botid, trade_obj)
+            buy_order_success, sell_order_success, trade_success = await self._execute_single_trade(botid, trade_obj)
         except Exception as e:
             self.logger.error(f"Error executing trade: {e}")
-
-        return trade_sucess
+            return False
+        return trade_success
 
     async def _execute_single_trade(self, botid, trade: Trade) -> Tuple[bool, bool, bool]:
         """
@@ -60,105 +54,128 @@ class SonarftExecution:
         buy_trade_amount = trade.buy_trade_amount
         sell_trade_amount = trade.sell_trade_amount
 
-        buy_order_id = None
-        sell_order_id = None
-        trade_position = None
-        buy_order_sucess = False
-        sell_order_sucess = False
+        buy_order_success = False
+        sell_order_success = False
         trade_success = False
 
         try:
-            period = 14
-            rsi_period = 14 
-            stoch_period = 14 
-            k_period = 3 
-            d_period = 3 
-            market_direction_buy = await self.sonarft_indicators.get_market_direction(
-                buy_exchange_id, base, quote, 'sma', period)
-            market_direction_sell = await self.sonarft_indicators.get_market_direction(
-                sell_exchange_id, base, quote, 'sma', period)
-            
-            market_rsi_buy = await self.sonarft_indicators.get_rsi(
-                buy_exchange_id, base, quote,  rsi_period)
-            market_rsi_sell = await self.sonarft_indicators.get_rsi(
-                sell_exchange_id, base, quote, rsi_period)
-            
-            market_stoch_rsi_buy_k, market_stoch_rsi_buy_d = await self.sonarft_indicators.get_stoch_rsi(
-            buy_exchange_id, base, quote, rsi_period, stoch_period, k_period, d_period)
+            # Use pre-computed indicators from trade_data if available, else fetch
+            market_direction_buy = trade.market_direction_buy if hasattr(trade, 'market_direction_buy') else None
+            market_direction_sell = trade.market_direction_sell if hasattr(trade, 'market_direction_sell') else None
+            market_rsi_buy = trade.market_rsi_buy if hasattr(trade, 'market_rsi_buy') else None
+            market_rsi_sell = trade.market_rsi_sell if hasattr(trade, 'market_rsi_sell') else None
+            market_stoch_rsi_buy_k = trade.market_stoch_rsi_buy_k if hasattr(trade, 'market_stoch_rsi_buy_k') else None
+            market_stoch_rsi_buy_d = trade.market_stoch_rsi_buy_d if hasattr(trade, 'market_stoch_rsi_buy_d') else None
+            market_stoch_rsi_sell_k = trade.market_stoch_rsi_sell_k if hasattr(trade, 'market_stoch_rsi_sell_k') else None
+            market_stoch_rsi_sell_d = trade.market_stoch_rsi_sell_d if hasattr(trade, 'market_stoch_rsi_sell_d') else None
 
-            market_stoch_rsi_sell_k, market_stoch_rsi_sell_d = await self.sonarft_indicators.get_stoch_rsi(
-            sell_exchange_id, base, quote, rsi_period, stoch_period, k_period, d_period)
+            # Fall back to live fetch only if indicators were not passed through
+            if any(v is None for v in [market_direction_buy, market_direction_sell,
+                                        market_rsi_buy, market_rsi_sell,
+                                        market_stoch_rsi_buy_k, market_stoch_rsi_sell_k]):
+                period = 14
+                rsi_period = 14
+                stoch_period = 14
+                k_period = 3
+                d_period = 3
+                (
+                    market_direction_buy, market_direction_sell,
+                    market_rsi_buy, market_rsi_sell,
+                    stoch_buy_result, stoch_sell_result,
+                ) = await asyncio.gather(
+                    self.sonarft_indicators.get_market_direction(buy_exchange_id, base, quote, 'sma', period),
+                    self.sonarft_indicators.get_market_direction(sell_exchange_id, base, quote, 'sma', period),
+                    self.sonarft_indicators.get_rsi(buy_exchange_id, base, quote, rsi_period),
+                    self.sonarft_indicators.get_rsi(sell_exchange_id, base, quote, rsi_period),
+                    self.sonarft_indicators.get_stoch_rsi(buy_exchange_id, base, quote, rsi_period, stoch_period, k_period, d_period),
+                    self.sonarft_indicators.get_stoch_rsi(sell_exchange_id, base, quote, rsi_period, stoch_period, k_period, d_period),
+                )
+                if stoch_buy_result:
+                    market_stoch_rsi_buy_k, market_stoch_rsi_buy_d = stoch_buy_result
+                if stoch_sell_result:
+                    market_stoch_rsi_sell_k, market_stoch_rsi_sell_d = stoch_sell_result
 
 
             #Long or Reverse to Short
             if market_direction_buy == 'bull' and market_direction_sell == 'bull':
                 if market_rsi_buy >= 70 and market_rsi_sell >= 70 and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
-                    # Execute short trade
                     trade_position = 'SHORT'
-                    self.sonarft_helpers.save_order_history(botid, trade, trade_position)
                     result_buy_order, result_sell_order = await self.execute_short_trade(buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price)
-                    buy_order_id, sell_order_id, buy_order_sucess, sell_order_sucess, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
+                    buy_order_id, sell_order_id, buy_order_success, sell_order_success, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
                 else:
-                    # Execute long trade
                     trade_position = 'LONG'
-                    self.sonarft_helpers.save_order_history(botid, trade, trade_position)
                     result_buy_order, result_sell_order = await self.execute_long_trade(buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price)
-                    buy_order_id, sell_order_id, buy_order_sucess, sell_order_sucess, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
+                    buy_order_id, sell_order_id, buy_order_success, sell_order_success, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
 
             #Short or Reverse to Long
             elif market_direction_buy == 'bear' and market_direction_sell == 'bear':
                 if market_rsi_buy <= 30 and market_rsi_sell <= 30 and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
-                    # Execute long trade
                     trade_position = 'LONG'
-                    self.sonarft_helpers.save_order_history(botid, trade, trade_position)
                     result_buy_order, result_sell_order = await self.execute_long_trade(buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price)
-                    buy_order_id, sell_order_id, buy_order_sucess, sell_order_sucess, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
-                    
+                    buy_order_id, sell_order_id, buy_order_success, sell_order_success, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
                 else:
-                    # Execute short trade
                     trade_position = 'SHORT'
-                    self.sonarft_helpers.save_order_history(botid, trade, trade_position)
                     result_buy_order, result_sell_order = await self.execute_short_trade(buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price)
-                    buy_order_id, sell_order_id, buy_order_sucess, sell_order_sucess, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
-                    
+                    buy_order_id, sell_order_id, buy_order_success, sell_order_success, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
+
+            if trade_position:
+                self.sonarft_helpers.save_order_history(botid, trade, trade_position)
+
 
             if trade_success:
-                # Save trade history
-                self.sonarft_helpers.save_trade_history(botid, trade, buy_order_id, sell_order_id, trade_position, buy_order_sucess, sell_order_sucess, trade_success)
+                self.sonarft_helpers.save_trade_history(botid, trade, buy_order_id, sell_order_id, trade_position, buy_order_success, sell_order_success, trade_success)
 
-            return buy_order_sucess, sell_order_sucess, trade_success
+            return buy_order_success, sell_order_success, trade_success
         except Exception as e:
             self.logger.error(str(e))
             return False, False, False
 
-    # Long
     async def execute_long_trade(self, buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price):
         result_buy_order = None
         result_sell_order = None
         buy_balance_status = await self.check_balance(buy_exchange_id, base, quote, 'buy', buy_trade_amount, buy_price)
-        if buy_balance_status:
-            result_buy_order = await self.create_order(buy_exchange_id, base, quote, buy_price, buy_trade_amount, 'buy', True)
-            buy_order_id, buy_executed_amount, buy_remaining_amount = result_buy_order
+        if not buy_balance_status:
+            return result_buy_order, result_sell_order
 
-            if buy_executed_amount == buy_trade_amount:
-                sell_balance_status = await self.check_balance(sell_exchange_id, base, quote, 'sell', sell_trade_amount, sell_price)
-                if sell_balance_status:
-                    result_sell_order = await self.create_order(sell_exchange_id, base, quote, sell_price, sell_trade_amount, 'sell', True)
-            
+        result_buy_order = await self.create_order(buy_exchange_id, base, quote, buy_price, buy_trade_amount, 'buy', True)
+        if result_buy_order is None:
+            return result_buy_order, result_sell_order
+
+        buy_order_id, buy_executed_amount, buy_remaining_amount = result_buy_order
+
+        # Use the actually filled amount for the sell leg (partial fill safe)
+        actual_sell_amount = buy_executed_amount
+        if actual_sell_amount <= 0:
+            self.logger.warning(f"Buy order {buy_order_id} filled 0 — skipping sell leg")
+            return result_buy_order, result_sell_order
+
+        sell_balance_status = await self.check_balance(sell_exchange_id, base, quote, 'sell', actual_sell_amount, sell_price)
+        if sell_balance_status:
+            result_sell_order = await self.create_order(sell_exchange_id, base, quote, sell_price, actual_sell_amount, 'sell', True)
+
         return result_buy_order, result_sell_order
-    
+
     async def execute_short_trade(self, buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price):
         result_buy_order = None
         result_sell_order = None
         sell_balance_status = await self.check_balance(sell_exchange_id, base, quote, 'sell', sell_trade_amount, sell_price)
-        if sell_balance_status:
-            result_sell_order = await self.create_order(sell_exchange_id, base, quote, sell_price, sell_trade_amount, 'sell', True)
-            sell_order_id, sell_executed_amount, sell_remaining_amount = result_sell_order
+        if not sell_balance_status:
+            return result_buy_order, result_sell_order
 
-            if sell_executed_amount == sell_trade_amount:
-                buy_balance_status = await self.check_balance(buy_exchange_id, base, quote, 'buy', buy_trade_amount, buy_price)
-                if buy_balance_status:
-                    result_buy_order = await self.create_order(buy_exchange_id, base, quote, buy_price, buy_trade_amount, 'buy', True)
+        result_sell_order = await self.create_order(sell_exchange_id, base, quote, sell_price, sell_trade_amount, 'sell', True)
+        if result_sell_order is None:
+            return result_buy_order, result_sell_order
+
+        sell_order_id, sell_executed_amount, sell_remaining_amount = result_sell_order
+
+        actual_buy_amount = sell_executed_amount
+        if actual_buy_amount <= 0:
+            self.logger.warning(f"Sell order {sell_order_id} filled 0 — skipping buy leg")
+            return result_buy_order, result_sell_order
+
+        buy_balance_status = await self.check_balance(buy_exchange_id, base, quote, 'buy', actual_buy_amount, buy_price)
+        if buy_balance_status:
+            result_buy_order = await self.create_order(buy_exchange_id, base, quote, buy_price, actual_buy_amount, 'buy', True)
 
         return result_buy_order, result_sell_order
 
@@ -168,8 +185,12 @@ class SonarftExecution:
         """
         Handle the trade results.
         """
+        if result_buy_order is None or result_sell_order is None:
+            self.logger.error("One or both order results are None — trade incomplete")
+            buy_order_id = result_buy_order[0] if result_buy_order else None
+            sell_order_id = result_sell_order[0] if result_sell_order else None
+            return buy_order_id, sell_order_id, False, False, False
 
-        # Get order results
         buy_order_id, buy_executed_amount, buy_remaining_amount = result_buy_order
         sell_order_id, sell_executed_amount, sell_remaining_amount = result_sell_order
 
@@ -189,45 +210,52 @@ class SonarftExecution:
         """
         Create an order on the specified exchange.
         """
-        #print("")
-        t = time.localtime()
-        current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
-        self.logger.info(
-            f"{current_time}: Creating {side} order on {exchange_id} for {trade_amount} {base} at {price} {quote}...")
+        self.logger.info(f"Creating {side} order on {exchange_id} for {trade_amount} {base} at {price} {quote}...")
 
-        latest_price = await self.monitor_price(exchange_id, base, quote, side, price)
-        order_placed_id, total_executed_amount, total_remaining_amount = await self.execute_order(exchange_id, base, quote, side, trade_amount, latest_price, monitor_order)
+        if self.is_simulation_mode:
+            latest_price = price
+        else:
+            latest_price = await self.monitor_price(exchange_id, base, quote, side, price)
+            if latest_price is None:
+                self.logger.warning(f"monitor_price returned None for {exchange_id} {side} — skipping order")
+                return None
+
+        order_placed_id, total_executed_amount, total_remaining_amount = await self.execute_order(
+            exchange_id, base, quote, side, trade_amount, latest_price, monitor_order
+        )
 
         if total_executed_amount == trade_amount:
-            self.logger.info(
-                f"{current_time}: {side} order on {exchange_id} for {trade_amount} {base} at {latest_price} {quote} has been executed!")
+            self.logger.info(f"{side} order on {exchange_id} for {trade_amount} {base} at {latest_price} {quote} executed.")
 
         return order_placed_id, total_executed_amount, total_remaining_amount
 
-    # Monitor exchange prices for sending orders only when they are closer the order book top
-    async def monitor_price(self, exchange_id: str, base: str, quote: str, side, price_to_check):
+    async def monitor_price(
+        self,
+        exchange_id: str,
+        base: str,
+        quote: str,
+        side,
+        price_to_check,
+        max_wait_seconds: int = 120,
+    ):
         try:
-            #print("")
-            t = time.localtime()
-            current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
-            while True:
+            deadline = asyncio.get_event_loop().time() + max_wait_seconds
+            while asyncio.get_event_loop().time() < deadline:
                 await asyncio.sleep(3)
                 price = await self.api_manager.get_last_price(exchange_id, base, quote)
-                #print(f"{current_time}: Monitoring price: {price_to_check} distance from current price: {price}", end="\r")
-                
                 if side == 'buy' and price_to_check >= price:
                     return price
-                
                 if side == 'sell' and price_to_check <= price:
                     return price
-                
+            self.logger.warning(
+                f"monitor_price timed out after {max_wait_seconds}s for {exchange_id} {base}/{quote} {side}"
+            )
+            return None
         except Exception as e:
             self.logger.error(f"error monitoring price for {exchange_id}: {e}")
-            return False
+            return None
         
-    # Execute the order either in real mode or simulation mode
     async def execute_order(self, exchange_id: str, base: str, quote: str, side: str, trade_amount: float, price: float, monitor_order):
-        #print("")
         if not self.is_simulation_mode:
             order_placed = await self.api_manager.create_order(exchange_id, base, quote, side, trade_amount, price)
             order_placed_id = order_placed['id']
@@ -247,47 +275,47 @@ class SonarftExecution:
 
             
 
-    # Monitor orders sent to the exchange
-    async def monitor_order(self, exchange_id: str, order_id: str, side_order, base: str, quote: str, target_amount: float, price) -> Tuple[float, float]:
+    async def monitor_order(
+        self,
+        exchange_id: str,
+        order_id: str,
+        side_order,
+        base: str,
+        quote: str,
+        target_amount: float,
+        price,
+        max_wait_seconds: int = 300,
+    ) -> Tuple[float, float]:
         """
-        Monitor an order until it is filled or canceled.
+        Monitor an order until it is filled, canceled, or the timeout is reached.
         """
-        t = time.localtime()
-        current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
-        self.logger.info(f"{current_time}: Monitoring {side_order} order: {order_id} at price: {price}")
-        
-        while True:
+        self.logger.info(f"Monitoring {side_order} order: {order_id} at price: {price}")
+        deadline = asyncio.get_event_loop().time() + max_wait_seconds
+        while asyncio.get_event_loop().time() < deadline:
             await asyncio.sleep(1)
             orders = await self.api_manager.watch_orders(exchange_id, base, quote)
-            
+
             if not orders:
                 return target_amount, 0
-            
-            desired_order = None
-            for order in orders:
-                if order["id"] == order_id:
-                    desired_order = order
-                    break
-            
+
+            desired_order = next((o for o in orders if o["id"] == order_id), None)
+
             if desired_order is None:
-                t = time.localtime()
-                current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
-                self.logger.info(f"{current_time}: {side_order} order: {order_id} already filled. Continue trading.\n")
+                self.logger.info(f"{side_order} order {order_id} already filled.")
                 return target_amount, 0
-            
-            #print(f"{current_time}: Monitoring {desired_order['side']} order: {desired_order['id']}, {desired_order['price']}, {desired_order['amount']}, {desired_order['status']}", end="\r")
-            
+
             if desired_order['status'] == 'closed':
-                t = time.localtime()
-                current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
-                self.logger.info(f"{current_time}: {desired_order['side']} order: {desired_order['id']} executed. Continue trading.\n")
+                self.logger.info(f"{side_order} order {order_id} executed.")
                 return target_amount, 0
-            
-            elif desired_order['status'] == 'canceled':
-                t = time.localtime()
-                current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
-                self.logger.warning(f"{current_time}: {desired_order['side']} order: {order_id} was canceled. Continue trading.\n")
+
+            if desired_order['status'] == 'canceled':
+                self.logger.warning(f"{side_order} order {order_id} was canceled.")
                 return 0, target_amount
+
+        self.logger.warning(
+            f"monitor_order timed out after {max_wait_seconds}s for order {order_id}"
+        )
+        return 0, target_amount
 
     # ### Handle Balance **************************************************
     async def check_balance(self, exchange_id: str, base: str, quote: str, side: str, trade_amount: float, price: float) -> bool:

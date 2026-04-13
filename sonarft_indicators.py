@@ -3,11 +3,8 @@ import pandas_ta as pta
 import numpy as np
 from typing import Tuple
 import logging
-from decimal import getcontext
 
 from sonarft_api_manager import SonarftApiManager
-
-getcontext().prec = 8
 
 
 class SonarftIndicators:
@@ -75,16 +72,15 @@ class SonarftIndicators:
         """Calculate the Relative Strength Index (RSI)."""
         try:
             ohlcv = await self.get_history(exchange, base, quote, timeframe, moving_average_period+2)
-
-            if len(ohlcv) < moving_average_period:
-                raise ValueError(
-                    f"Not enough data to calculate RSI. Need {moving_average_period} periods, have {len(ohlcv)}.")
-
+            if not ohlcv or len(ohlcv) < moving_average_period:
+                raise ValueError(f"Not enough data for RSI: need {moving_average_period}, have {len(ohlcv) if ohlcv else 0}")
             close_prices = pd.Series([x[4] for x in ohlcv])
-
             rsi = pta.rsi(close_prices, length=moving_average_period)
-
-            return rsi.iloc[-1]
+            value = rsi.iloc[-1]
+            if pd.isna(value):
+                self.logger.warning(f"RSI returned NaN for {exchange} {base}/{quote}")
+                return None
+            return float(value)
         except Exception as e:
             self.logger.error(f"Error get_rsi: {str(e)}")
             return None
@@ -94,57 +90,44 @@ class SonarftIndicators:
         """Calculate the Stochastic RSI."""
         try:
             ohlcv = await self.get_history(exchange, base, quote, timeframe, rsi_period + stoch_period + d_period + 1)
-
-            if len(ohlcv) < rsi_period + stoch_period:
-                raise ValueError(
-                    f"Not enough data to calculate StochRSI. Need {rsi_period + stoch_period} periods, have {len(ohlcv)}.")
-
+            if not ohlcv or len(ohlcv) < rsi_period + stoch_period:
+                raise ValueError(f"Not enough data for StochRSI: need {rsi_period + stoch_period}, have {len(ohlcv) if ohlcv else 0}")
             close_prices = pd.Series([x[4] for x in ohlcv])
-
-            # Calculate the StochRSI (%K line) and %D line
             stoch_rsi = pta.stochrsi(close_prices, rsi_period, k_period, d_period)
-
-            stoch_rsi_k = stoch_rsi.iloc[-1][0]  # Extract the last %K value
-            stoch_rsi_d = stoch_rsi.iloc[-1][1]  # Extract the last %D value
-
-            return stoch_rsi_k, stoch_rsi_d
+            k_val = stoch_rsi.iloc[-1][0]
+            d_val = stoch_rsi.iloc[-1][1]
+            if pd.isna(k_val) or pd.isna(d_val):
+                self.logger.warning(f"StochRSI returned NaN for {exchange} {base}/{quote}")
+                return None
+            return float(k_val), float(d_val)
         except Exception as e:
             self.logger.error(f"Error get_stoch_rsi: {str(e)}")
             return None
 
 
     async def get_market_direction(self, exchange_id, base, quote, ma_type='sma', moving_average_period=14, timeframe='1m'):
-        """Get the Market Direction Simple Moving Average (SMA) or Exponential Moving Average (EMA)."""
+        """Get market direction via SMA or EMA."""
         try:
             history_data = await self.get_history(exchange_id, base, quote, timeframe, moving_average_period+2)
-
-            if history_data is None or len(history_data) < moving_average_period:
-                raise ValueError(
-                    f"{base}/{quote}: Market Direction: Insufficient data for {exchange_id} {base}/{quote}.\n")
-
+            if not history_data or len(history_data) < moving_average_period:
+                raise ValueError(f"Insufficient data for market direction: {exchange_id} {base}/{quote}")
             close_prices = pd.Series([x[4] for x in history_data])
-            moving_average = None
-
             if ma_type == 'sma':
-                moving_average = pta.sma(
-                    close_prices, length=moving_average_period)
+                moving_average = pta.sma(close_prices, length=moving_average_period)
             elif ma_type == 'ema':
-                moving_average = pta.ema(
-                    close_prices, length=moving_average_period)
+                moving_average = pta.ema(close_prices, length=moving_average_period)
             else:
-                raise ValueError(
-                    f"Invalid ma_type: {ma_type}. Expected 'sma' or 'ema'.")
-
+                raise ValueError(f"Invalid ma_type: {ma_type}")
             current_price = close_prices.iloc[-1]
             ma_value = moving_average.iloc[-1]
-
-            direction = 'neutral'
+            if pd.isna(ma_value) or pd.isna(current_price):
+                self.logger.warning(f"Market direction MA returned NaN for {exchange_id} {base}/{quote}")
+                return 'neutral'
             if current_price > ma_value:
-                direction = 'bull'
-            elif current_price < ma_value:
-                direction = 'bear'
-
-            return direction
+                return 'bull'
+            if current_price < ma_value:
+                return 'bear'
+            return 'neutral'
         except Exception as e:
             self.logger.error(f"Error get_market_direction: {str(e)}")
             return None    
@@ -174,13 +157,15 @@ class SonarftIndicators:
             previous_avg_price = sum(previous_prices) / N
 
             # Calculate the percent change
-            price_change = 100 * (current_avg_price -
-                                previous_avg_price) / previous_avg_price
+            price_change = 100 * (current_avg_price - previous_avg_price) / previous_avg_price
+            if previous_avg_price == 0:
+                return 'neutral'
 
-            # Determine market trend based on price change
-            if price_change > threshold:
+            # price_change is already in percent (multiplied by 100 above).
+            # threshold is treated as a percent value (e.g. 0.1 = 0.1%).
+            if price_change > threshold * 100:
                 return 'bull'
-            elif price_change < -threshold:
+            elif price_change < -(threshold * 100):
                 return 'bear'
             else:
                 return 'neutral'
@@ -190,21 +175,24 @@ class SonarftIndicators:
         
 
     async def get_macd(self, exchange, base, quote, short_period=12, long_period=26, signal_period=9, warmup=10):
-        """Calculate the Moving Average Convergence Divergence (MACD) indicator."""
+        """Calculate MACD."""
         try:
             timeframe = '1m'
             ohlcv = await self.get_history(exchange, base, quote, timeframe, long_period + signal_period + warmup)
-
-            if len(ohlcv) < long_period + signal_period + warmup:
-                raise ValueError(f"Not enough data to calculate MACD. Need {long_period + signal_period + warmup} periods, have {len(ohlcv)}.")
-
+            if not ohlcv or len(ohlcv) < long_period + signal_period + warmup:
+                raise ValueError(f"Not enough data for MACD: need {long_period + signal_period + warmup}, have {len(ohlcv) if ohlcv else 0}")
             close_prices = pd.Series([x[4] for x in ohlcv])
             macd = pta.macd(close_prices, short_period, long_period, signal_period)
-            macd_value = macd['MACD_12_26_9'].iloc[-1]
-            signal_value = macd['MACDs_12_26_9'].iloc[-1]
-            histogram_value = macd['MACDh_12_26_9'].iloc[-1]
-
-            return macd_value, signal_value, histogram_value
+            macd_col = f'MACD_{short_period}_{long_period}_{signal_period}'
+            signal_col = f'MACDs_{short_period}_{long_period}_{signal_period}'
+            hist_col = f'MACDh_{short_period}_{long_period}_{signal_period}'
+            if macd_col not in macd.columns:
+                raise KeyError(f"Expected MACD column '{macd_col}' not found. Available: {list(macd.columns)}")
+            m, s, h = macd[macd_col].iloc[-1], macd[signal_col].iloc[-1], macd[hist_col].iloc[-1]
+            if pd.isna(m) or pd.isna(s) or pd.isna(h):
+                self.logger.warning(f"MACD returned NaN for {exchange} {base}/{quote}")
+                return None
+            return float(m), float(s), float(h)
         except Exception as e:
             self.logger.error(f"Error get_macd: {str(e)}")
             return None
@@ -267,7 +255,7 @@ class SonarftIndicators:
         if depth_bids > depth_asks:
             direction = "bull"
         else:
-            "bear"
+            direction = "bear"
 
         # Check if the spread or price is changing rapidly
         if abs(spread_rate) > self.spread_rate_threshold:
@@ -349,8 +337,9 @@ class SonarftIndicators:
         bid_volume_sum = sum([volume for price, volume in bids])
         ask_volume_sum = sum([volume for price, volume in asks])
 
-        liquidity = (bid_volume_sum + ask_volume_sum) / \
-            (bids[0][0] + asks[0][0]) / 2
+        if not bids or not asks or (bids[0][0] + asks[0][0]) == 0:
+            return 0.0
+        liquidity = (bid_volume_sum + ask_volume_sum) / (bids[0][0] + asks[0][0]) / 2
         normalized_liquidity = min(max(liquidity, 0), 1)  # Normalize to [0, 1]
         return normalized_liquidity
 

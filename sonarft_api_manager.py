@@ -1,8 +1,14 @@
-from decimal import getcontext
 from typing import List, Dict, Tuple, Union, Optional
+import asyncio
 import logging
+import time as _time
 
-getcontext().prec = 8
+
+# Candle duration in seconds per timeframe — used as cache TTL
+_TIMEFRAME_SECONDS: Dict[str, int] = {
+    '1m': 60, '3m': 180, '5m': 300, '15m': 900,
+    '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400,
+}
 
 class SonarftApiManager:
     """
@@ -24,7 +30,8 @@ class SonarftApiManager:
 
         self.exchanges_fees = exchanges_fees
 
-        self.markets = {}
+        self.markets: Dict[str, dict] = {}
+        self._ohlcv_cache: Dict[str, Tuple[float, list]] = {}  # key -> (expires_at, data)
 
     def load_api_library(self):
         """
@@ -53,16 +60,16 @@ class SonarftApiManager:
         method = ccxt_method if self.__ccxt__ else ccxtpro_method
         method_call = getattr(exchange, method)
 
-        # self.logger.info(f"Calling method {method} for {exchange}...")
         try:
             if self.__ccxt__:
-                self.sync_wait_for_rate_limit(exchange)
-                result = method_call(*args, **kwargs)
+                await self.wait_for_rate_limit(exchange)
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, lambda: method_call(*args, **kwargs))
             else:
                 await self.wait_for_rate_limit(exchange)
                 result = await method_call(*args, **kwargs)
         except Exception as e:
-            print(f"Error calling method {method}: {e}")
+            self.logger.error(f"Error calling method {method}: {e}")
         return result
 
     # ###  Load and Setup ***********************************************************************
@@ -75,14 +82,20 @@ class SonarftApiManager:
         ]
 
     async def load_markets(self, exchange_id):
-        """
-        Load markets for all exchange instances.
-        """
+        """Load and cache markets for a single exchange. Safe to call multiple times."""
+        if exchange_id in self.markets:
+            return self.markets[exchange_id]
         exchange_markets = await self.call_api_method(exchange_id, 'load_markets', 'load_markets')
         if exchange_markets:
-            self.markets.update(exchange_markets)
+            self.markets[exchange_id] = exchange_markets
+        return self.markets.get(exchange_id, {})
 
-        return self.markets
+    async def load_all_markets(self):
+        """Load markets for all configured exchanges at startup."""
+        await asyncio.gather(*[
+            self.load_markets(exchange.id)
+            for exchange in self.exchanges_instances
+        ])
 
     def setAPIKeys(self, exchange_id: str, api_key: str, secret: str, password: str):
         """
@@ -110,9 +123,7 @@ class SonarftApiManager:
         try:
             symbol = f"{base}/{quote}"
             order = await self.call_api_method(exchange_id, 'create_order', 'create_order', symbol, 'limit', side, amount, price)
-            print("")
-            self.logger.info(
-                f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}")
+            self.logger.info(f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}")
         except Exception as e:
             self.logger.error(f"Error creating order: {e}")
             order = None
@@ -198,15 +209,19 @@ class SonarftApiManager:
         last_price = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
         return last_price['last']
 
-    # TODO: Finish the Implementation - use the timeframe, since and limit
-    async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> List[Dict[str, Union[int, float]]]:
-        """
-        Get the history for the given exchange_id, base and quote.
-        """
+    async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> List:
+        """Fetch OHLCV history with a per-candle TTL cache."""
         symbol = f"{base}/{quote}"
+        cache_key = f"{exchange_id}:{symbol}:{timeframe}:{limit}"
+        ttl = _TIMEFRAME_SECONDS.get(timeframe, 60)
+        now = _time.monotonic()
+        cached = self._ohlcv_cache.get(cache_key)
+        if cached and now < cached[0]:
+            return cached[1]
         history = await self.call_api_method(exchange_id, 'fetch_ohlcv', 'fetch_ohlcv', symbol, timeframe, since, limit)
-        
-        return history
+        if history:
+            self._ohlcv_cache[cache_key] = (now + ttl, history)
+        return history or []
 
     # TODO: Finish the Implementation - use the since and limit
     async def get_trades_history(self, exchange_id: str, base: str, quote: str) -> List[Dict[str, Union[int, float]]]:
@@ -217,10 +232,33 @@ class SonarftApiManager:
         trades_history = await self.call_api_method(exchange_id, 'fetch_trades', 'fetch_trades', symbol)
         return trades_history
 
-    def get_exchange_and_symbol(self, exchange_id: str, base: str, quote: str):
-        exchange = self.get_exchange_by_id(exchange_id)
+    def get_symbol_precision(self, exchange_id: str, base: str, quote: str) -> Optional[Dict]:
+        """Return precision rules for a symbol from loaded market data, or None if unavailable."""
         symbol = f"{base}/{quote}"
-        return exchange, symbol
+        market = self.markets.get(exchange_id, {}).get(symbol)
+        if not market:
+            return None
+        precision = market.get('precision', {})
+        limits = market.get('limits', {})
+        price_prec = precision.get('price')
+        amount_prec = precision.get('amount')
+        if price_prec is None or amount_prec is None:
+            return None
+        # Convert to decimal places if given as a tick size (e.g. 0.01 -> 2)
+        def _to_dp(v):
+            if v is None:
+                return 8
+            if isinstance(v, int):
+                return v
+            s = f"{v:.10f}".rstrip('0')
+            return len(s.split('.')[-1]) if '.' in s else 0
+        return {
+            'prices_precision': _to_dp(price_prec),
+            'buy_amount_precision': _to_dp(amount_prec),
+            'sell_amount_precision': _to_dp(amount_prec),
+            'cost_precision': 8,
+            'fee_precision': 8,
+        }
 
     def get_exchange_by_id(self, exchange_id: str):
         """
@@ -231,43 +269,35 @@ class SonarftApiManager:
                 return exchange
         return None
 
-    # ###  Support for Trading Strategy Methods ***********************************************************************
     async def get_latest_prices(self, base: str, quote: str, weight) -> List[Tuple[str, float, float, float, str]]:
-        """
-        Get the latest prices for the given base and quote across all exchanges.
-        """
+        """Get the latest prices for the given base and quote across all exchanges."""
         symbol = f"{base}/{quote}"
         prices = []
-        for exchange in self.exchanges_instances:
+
+        async def _fetch_exchange(exchange):
             try:
-                await self.load_markets(exchange.id)
-                if symbol not in exchange.markets:
-                    self.logger.warning(
-                        f"{symbol} is not available on {exchange.id}.")
-                    continue
-
-                # Fetch the order book data
-                order_book = await self.call_api_method(exchange.id, 'fetch_order_book', 'watch_order_book', symbol)
-                if order_book['asks'] is None or order_book['bids'] is None:
-                    self.logger.warning(
-                        f"Order book for {symbol} in {exchange.id} is invalid: asks or bids is None")
-                    continue
-
-                bid_vwap, ask_vwap = self.get_weighted_prices(weight,
-                                                                           order_book)
-
-                ticker = await self.call_api_method(exchange.id, 'fetch_ticker', 'watch_ticker', symbol)
-                if ticker['ask'] is not None and ticker['ask'] != 0 and ticker['bid'] is not None and ticker['bid'] != 0:
-                    prices.append(
-                        (exchange.id, bid_vwap, ask_vwap, ticker['last'], symbol))
-                else:
-                    self.logger.warning(
-                        f"Ticker for {symbol} in {exchange.id} is invalid: ask or bid is None or 0")
+                cached = self.markets.get(exchange.id, {})
+                if symbol not in cached:
+                    self.logger.warning(f"{symbol} is not available on {exchange.id}.")
+                    return None
+                order_book, ticker = await asyncio.gather(
+                    self.call_api_method(exchange.id, 'fetch_order_book', 'watch_order_book', symbol),
+                    self.call_api_method(exchange.id, 'fetch_ticker', 'watch_ticker', symbol),
+                )
+                if order_book is None or order_book['asks'] is None or order_book['bids'] is None:
+                    self.logger.warning(f"Order book for {symbol} in {exchange.id} is invalid.")
+                    return None
+                bid_vwap, ask_vwap = self.get_weighted_prices(weight, order_book)
+                if ticker['ask'] and ticker['ask'] != 0 and ticker['bid'] and ticker['bid'] != 0:
+                    return (exchange.id, bid_vwap, ask_vwap, ticker['last'], symbol)
+                self.logger.warning(f"Ticker for {symbol} in {exchange.id} is invalid.")
+                return None
             except Exception as e:
-                self.logger.error(
-                    f"Error fetching latest price for {exchange.id} and symbol {symbol}: {e}")
-                continue
+                self.logger.error(f"Error fetching latest price for {exchange.id} {symbol}: {e}")
+                return None
 
+        results = await asyncio.gather(*[_fetch_exchange(ex) for ex in self.exchanges_instances])
+        prices = [r for r in results if r is not None]
         return prices
 
     def get_weighted_prices(self, depth: int, order_book: Dict) -> Tuple[float, float]:
@@ -285,30 +315,19 @@ class SonarftApiManager:
         bids = order_book['bids'][:depth]
         asks = order_book['asks'][:depth]
 
-        # Calculate the total bid volume and volume-weighted bid price
         total_bid_volume = sum(volume for _, volume in bids)
-        bid_vwap = sum(price * volume for price,
-                       volume in bids) / total_bid_volume
-
-        # Calculate the total ask volume and volume-weighted ask price
         total_ask_volume = sum(volume for _, volume in asks)
-        ask_vwap = sum(price * volume for price,
-                       volume in asks) / total_ask_volume
+
+        if total_bid_volume == 0 or total_ask_volume == 0:
+            return 0.0, 0.0
+
+        bid_vwap = sum(price * volume for price, volume in bids) / total_bid_volume
+        ask_vwap = sum(price * volume for price, volume in asks) / total_ask_volume
 
         return bid_vwap, ask_vwap
 
     # ###  support methods ***********************************************************************
 
-    def sync_wait_for_rate_limit(self, exchange):
-        """
-        Wait for the rate limit to pass.
-        """
-        rate_limit = exchange.rateLimit / 1000
-        exchange.sleep(rate_limit)
-
     async def wait_for_rate_limit(self, exchange):
-        """
-        Wait for the rate limit to pass.
-        """
         rate_limit = exchange.rateLimit / 1000
         await exchange.sleep(rate_limit)

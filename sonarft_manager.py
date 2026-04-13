@@ -55,19 +55,35 @@ class BotManager:
                     if botid in self._clients[client_id]:
                         self._clients[client_id].remove(botid)
 
+    def _get_bot_unsafe(self, botid):
+        """Non-locking bot lookup — only call while already holding self._lock."""
+        return self._bots.get(botid)
+
     async def get_bot_instance(self, botid):
         """
         Returns a bot instance from the _bots dictionary.
-
-        Parameters:
-        botid (str): The unique identifier for the bot.
-
-        Returns:
-        SonarftBot: An instance of the SonarftBot class.
         """
         async with self._lock:
-            if botid in self._bots:
-                return self._bots.get(botid)
+            return self._get_bot_unsafe(botid)
+
+    async def set_update(self, botid, update_data) -> bool:
+        async with self._lock:
+            sonarftbot = self._get_bot_unsafe(botid)
+            if not sonarftbot:
+                if self.logger:
+                    self.logger.warning(f"Bot {botid} not found. Update failed.")
+                return False
+            sonarftbot.set_update(update_data)
+            return True
+
+    async def get_update(self, botid):
+        async with self._lock:
+            sonarftbot = self._get_bot_unsafe(botid)
+            if not sonarftbot:
+                if self.logger:
+                    self.logger.warning(f"Bot {botid} not found. Cannot get update.")
+                return None
+            return sonarftbot.get_update()
 
     def get_botids(self, client_id):
         """
@@ -148,7 +164,7 @@ class BotManager:
         try:
             # Run the bot
             sonarftbot = await self.get_bot_instance(botid)
-            print(f"Running {sonarftbot} - {botid}")
+            self.logger.info(f"Running {sonarftbot} - {botid}")
             if not sonarftbot:
                 return
 
@@ -167,50 +183,13 @@ class BotManager:
         botid (str): The unique identifier for the bot.
         """
         sonarftbot = await self.get_bot_instance(botid)
-        print(f"Removing {sonarftbot} - {botid}")
+        self.logger.info(f"Removing {sonarftbot} - {botid}")
         if not sonarftbot:
             return
 
         await self.remove_bot_instance(botid)
         self.logger.info("Bot REMOVED!")
 
-    async def set_update(self, botid, update_data) -> bool:
-        """
-        Sets update data for a specific bot identified by botid.
-
-        Parameters:
-        botid (str): The unique identifier for the bot.
-        update_data (Any): The data to set as the update.
-
-        Returns:
-        bool: True if successful, False otherwise.
-        """
-        async with self._lock:
-            sonarftbot = await self.get_bot_instance(botid)
-            if not sonarftbot:
-                if self.logger:
-                    self.logger.warning(f"Bot {botid} not found. Update failed.")
-                return False
-            sonarftbot.set_update(update_data)
-            return True
-
-    async def get_update(self, botid) -> Any:
-        """
-        Gets update data for a specific bot identified by botid.
-
-        Parameters:
-        botid (str): The unique identifier for the bot.
-
-        Returns:
-        Any: The update data if the bot exists, None otherwise.
-        """
-        async with self._lock:
-            sonarftbot = await self.get_bot_instance(botid)
-            if not sonarftbot:
-                if self.logger:
-                    self.logger.warning(f"Bot {botid} not found. Cannot get update.")
-                return None
-            return sonarftbot.get_update()
 
 class BotCreationError(Exception):
     """Raised when there's an issue during the bot creation process."""

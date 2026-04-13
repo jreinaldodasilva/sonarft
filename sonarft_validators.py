@@ -1,6 +1,5 @@
 import asyncio
 from dataclasses import dataclass
-from decimal import getcontext
 import logging
 from typing import List, Tuple
 import numpy as np
@@ -11,8 +10,6 @@ from sonarft_helpers import Trade
 # Constants
 LOW_VOLATILITY_THRESHOLD = 0.1
 MEDIUM_VOLATILITY_THRESHOLD = 0.5
-
-getcontext().prec = 8
 
 class SonarftValidators:
     def __init__(self, api_manager: SonarftApiManager, logger=None):
@@ -108,12 +105,35 @@ class SonarftValidators:
             self.logger.warning(f"{base}/{quote}: Spread Threshold: Order book not found\n")
             return 0, 0, 0, 0, None    
 
-        trade_spread_sum = sum([(ask_price - bid_price) * min(ask_volume, bid_volume) for (bid_price, bid_volume) in buy_order_book['bids'][:10] for (ask_price, ask_volume) in sell_order_book['asks'][:10]])
-        trade_volume_sum = sum([min(ask_volume, bid_volume) for (_, bid_volume) in buy_order_book['bids'][:10] for (_, ask_volume) in sell_order_book['asks'][:10]])
-        trade_spread_avg = trade_spread_sum / trade_volume_sum
-        trade_price_sum = sum([((ask_price + bid_price)/2) for bid_price, _ in buy_order_book['bids'][:100] for ask_price, _ in sell_order_book['asks'][:100]])
+        buy_bids = buy_order_book['bids'][:100]
+        sell_asks = sell_order_book['asks'][:100]
+        actual_count = len(buy_bids) * len(sell_asks)
 
-        trade_price_avg = trade_price_sum / 100
+        trade_spread_sum = sum(
+            (ask_price - bid_price) * min(ask_volume, bid_volume)
+            for (bid_price, bid_volume) in buy_order_book['bids'][:10]
+            for (ask_price, ask_volume) in sell_order_book['asks'][:10]
+        )
+        trade_volume_sum = sum(
+            min(ask_volume, bid_volume)
+            for (_, bid_volume) in buy_order_book['bids'][:10]
+            for (_, ask_volume) in sell_order_book['asks'][:10]
+        )
+        if trade_volume_sum == 0:
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Zero trade volume sum")
+            return 0, 0, 0, 0, None
+
+        trade_spread_avg = trade_spread_sum / trade_volume_sum
+        trade_price_sum = sum(
+            (ask_price + bid_price) / 2
+            for bid_price, _ in buy_bids
+            for ask_price, _ in sell_asks
+        )
+        if actual_count == 0:
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Empty order books")
+            return 0, 0, 0, 0, None
+
+        trade_price_avg = trade_price_sum / actual_count
         trade_spread_percentage_avg = (trade_spread_avg / trade_price_avg) * 100
 
         thresholds = self.calculate_thresholds_based_on_historical_data(historical_data_buy, historical_data_sell)
@@ -132,7 +152,7 @@ class SonarftValidators:
 
     async def get_trade_spread_threshold(self, buy_exchange: str, sell_exchange: str, base, quote) -> Tuple[float, float, float, float, str]:
         timeframe = "1m"
-        limit = None
+        limit = 100
         historical_data_buy, historical_data_sell = await asyncio.gather(
             self.get_history(buy_exchange, base, quote, timeframe, limit),
             self.get_history(sell_exchange, base, quote, timeframe, limit),
