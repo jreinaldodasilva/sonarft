@@ -1,0 +1,7 @@
+{
+    "symbols_1": [
+        { "base": "BTC", "quotes": ["USDT"] },
+        { "base": "ETH", "quotes": ["USDT"] }
+    ],
+    "symbols_2": [{ "base": "ETH", "quotes": ["USDT"] }]
+}

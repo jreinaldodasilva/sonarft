@@ -1,0 +1,9 @@
+{
+    "parameters_1": [
+        {
+            "profit_percentage_threshold": 0.0001,
+            "trade_amount": 1,
+            "is_simulating_trade": 1
+        }
+    ]
+}

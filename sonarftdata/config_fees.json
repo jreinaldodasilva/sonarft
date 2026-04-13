@@ -1,0 +1,26 @@
+{
+    "exchanges_fees_1": [
+        { "exchange": "binance","buy_fee": 0.001, "sell_fee": 0.001 },
+        { "exchange": "okx","buy_fee": 0.0008, "sell_fee": 0.001 },
+        { "exchange": "binanceus","buy_fee": 0.004, "sell_fee": 0.006 },
+        { "exchange": "bitfinex","buy_fee": 0.001, "sell_fee": 0.002 },
+        { "exchange": "bitget","buy_fee": 0.002, "sell_fee": 0.002 },
+        { "exchange": "bitmart","buy_fee": 0.0025, "sell_fee": 0.0025 },
+        { "exchange": "bitstamp","buy_fee": 0.003, "sell_fee": 0.004 },
+        { "exchange": "bittrex","buy_fee": 0.0075, "sell_fee": 0.0075 },
+        { "exchange": "bybit","buy_fee": 0.001, "sell_fee": 0.001 },
+        { "exchange": "cryptocom", "buy_fee": 0.00075, "sell_fee": 0.00075 },
+        { "exchange": "gate","buy_fee": 0.002, "sell_fee": 0.002 },
+        { "exchange": "gemini","buy_fee": 0.002, "sell_fee": 0.004 },
+        { "exchange": "huobi","buy_fee": 0.002, "sell_fee": 0.002 },
+        { "exchange": "kraken", "buy_fee": 0.0016, "sell_fee": 0.0026 },
+        { "exchange": "kucoin","buy_fee": 0.001, "sell_fee": 0.001 },
+        { "exchange": "upbit","buy_fee": 0.0025, "sell_fee": 0.0025 },
+        { "exchange": "bitmex","buy_fee": 0.00075, "sell_fee": 0.00075 },
+        { "exchange": "oceanex","buy_fee": 0.002, "sell_fee": 0.002 },
+        { "exchange": "deribit","buy_fee": 0.002, "sell_fee": 0.002 }
+    ],
+    "exchanges_fees_2": [
+        { "exchange": "binance", "buy_fee": 0.0, "sell_fee": 0.0 }
+    ]
+}

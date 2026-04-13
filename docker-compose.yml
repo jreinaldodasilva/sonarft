@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  traefik:
+    image: traefik:v2.5
+    command:
+      - --api.insecure=true
+      - --providers.docker
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.myresolver.acme.tlschallenge=true
+      - --certificatesresolvers.myresolver.acme.email=sonarft@outlook.com
+      - --certificatesresolvers.myresolver.acme.storage=/acme.json
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./acme.json:/acme.json
+    labels:
+      - traefik.http.routers.api.rule=Host(`monitor.sonarft.com`)
+      - traefik.http.routers.api.service=api@internal
+
+  sonarftbot:
+    image: sonarftbot:latest
+    labels:
+      - traefik.http.routers.sonarftbot.rule=Host(`sonarft.com`)
+      - traefik.http.routers.sonarftbot.entrypoints=websecure
+      - traefik.http.routers.sonarftbot.tls.certresolver=myresolver
+      - traefik.http.services.sonarftbot.loadbalancer.server.port=5000

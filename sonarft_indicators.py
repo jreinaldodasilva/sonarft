@@ -1,0 +1,431 @@
+import pandas as pd
+import pandas_ta as pta
+import numpy as np
+from typing import Tuple
+import logging
+from decimal import getcontext
+
+from sonarft_api_manager import SonarftApiManager
+
+getcontext().prec = 8
+
+
+class SonarftIndicators:
+    def __init__(self, api_manager: SonarftApiManager, logger=None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.api_manager = api_manager
+
+        self.spread_rate_threshold = 0.01
+        self.price_rate_threshold = 0.01
+        self.previous_spread = 1
+
+    def get_profit_factor(self, volatility: float, min_spread: float = 0.99912, max_spread: float = 0.99972) -> float:
+        """
+        Calculate a dynamic spread factor based on market volatility.
+        """
+        try:
+            normalized_volatility = min(max(volatility, 0), 1)
+
+            # Calculate the spread factor as a linear interpolation between the minimum and maximum spread
+            spread_factor = min_spread + \
+                (max_spread - min_spread) * normalized_volatility
+
+            return spread_factor
+        except Exception as e:
+            self.logger.error(f"Error calculating profit factor: {str(e)}")
+            return None
+
+    async def get_support_price(self, exchange_id, base, quote, lookback_period=24, timeframe='1h'):
+        """
+        Calculate support level based on historical data over the lookback_period.
+        """
+        try:
+            history_data = await self.get_history(exchange_id, base, quote, timeframe, lookback_period)
+
+            # Ensure there are enough periods to calculate
+            if history_data is None or len(history_data) < lookback_period:
+                return None
+
+            # 'Low' price is at index 3 in OHLCV data
+            low_prices = [x[3] for x in history_data]
+            return min(low_prices)
+        except Exception as e:
+            self.logger.error(f"Error get_support_price: {str(e)}")
+            return None
+
+    async def get_resistance_price(self, exchange_id, base, quote, lookback_period=24, timeframe='1h'):
+        """
+        Calculate resistance level based on historical data over the lookback_period.
+        """
+        try:
+            history_data = await self.get_history(exchange_id, base, quote, timeframe, lookback_period)
+
+            # Ensure there are enough periods to calculate
+            if history_data is None or len(history_data) < lookback_period:
+                return None
+
+            # 'High' price is at index 2 in OHLCV data
+            high_prices = [x[2] for x in history_data]
+            return max(high_prices)
+        except Exception as e:
+            self.logger.error(f"Error get_resistance_price: {str(e)}")
+            return None
+
+    async def get_rsi(self, exchange, base, quote, moving_average_period=14, timeframe='1m'):
+        """Calculate the Relative Strength Index (RSI)."""
+        try:
+            ohlcv = await self.get_history(exchange, base, quote, timeframe, moving_average_period+2)
+
+            if len(ohlcv) < moving_average_period:
+                raise ValueError(
+                    f"Not enough data to calculate RSI. Need {moving_average_period} periods, have {len(ohlcv)}.")
+
+            close_prices = pd.Series([x[4] for x in ohlcv])
+
+            rsi = pta.rsi(close_prices, length=moving_average_period)
+
+            return rsi.iloc[-1]
+        except Exception as e:
+            self.logger.error(f"Error get_rsi: {str(e)}")
+            return None
+    
+
+    async def get_stoch_rsi(self, exchange, base, quote, rsi_period=14, stoch_period=14, k_period=3, d_period=3, timeframe='1m'):
+        """Calculate the Stochastic RSI."""
+        try:
+            ohlcv = await self.get_history(exchange, base, quote, timeframe, rsi_period + stoch_period + d_period + 1)
+
+            if len(ohlcv) < rsi_period + stoch_period:
+                raise ValueError(
+                    f"Not enough data to calculate StochRSI. Need {rsi_period + stoch_period} periods, have {len(ohlcv)}.")
+
+            close_prices = pd.Series([x[4] for x in ohlcv])
+
+            # Calculate the StochRSI (%K line) and %D line
+            stoch_rsi = pta.stochrsi(close_prices, rsi_period, k_period, d_period)
+
+            stoch_rsi_k = stoch_rsi.iloc[-1][0]  # Extract the last %K value
+            stoch_rsi_d = stoch_rsi.iloc[-1][1]  # Extract the last %D value
+
+            return stoch_rsi_k, stoch_rsi_d
+        except Exception as e:
+            self.logger.error(f"Error get_stoch_rsi: {str(e)}")
+            return None
+
+
+    async def get_market_direction(self, exchange_id, base, quote, ma_type='sma', moving_average_period=14, timeframe='1m'):
+        """Get the Market Direction Simple Moving Average (SMA) or Exponential Moving Average (EMA)."""
+        try:
+            history_data = await self.get_history(exchange_id, base, quote, timeframe, moving_average_period+2)
+
+            if history_data is None or len(history_data) < moving_average_period:
+                raise ValueError(
+                    f"{base}/{quote}: Market Direction: Insufficient data for {exchange_id} {base}/{quote}.\n")
+
+            close_prices = pd.Series([x[4] for x in history_data])
+            moving_average = None
+
+            if ma_type == 'sma':
+                moving_average = pta.sma(
+                    close_prices, length=moving_average_period)
+            elif ma_type == 'ema':
+                moving_average = pta.ema(
+                    close_prices, length=moving_average_period)
+            else:
+                raise ValueError(
+                    f"Invalid ma_type: {ma_type}. Expected 'sma' or 'ema'.")
+
+            current_price = close_prices.iloc[-1]
+            ma_value = moving_average.iloc[-1]
+
+            direction = 'neutral'
+            if current_price > ma_value:
+                direction = 'bull'
+            elif current_price < ma_value:
+                direction = 'bear'
+
+            return direction
+        except Exception as e:
+            self.logger.error(f"Error get_market_direction: {str(e)}")
+            return None    
+
+    async def get_short_term_market_trend(self, exchange, base, quote, timeframe='1m', limit=6, threshold=0.001):
+        """
+        Calculate the percent price change between the last N trades and the N trades before those,
+        and determine if this change indicates a bull or bear market.
+        """
+        try:
+            N = limit // 2  # we'll consider the last N periods and the N periods before those
+
+            # Fetch OHLCV data
+            ohlcv = await self.get_history(exchange, base, quote, timeframe, limit)
+
+            # Ensure there are enough periods to calculate a change
+            if len(ohlcv) < 2*N:
+                raise ValueError(
+                    f"Not enough data to calculate market trend. Need {2*N} periods, have {len(ohlcv)}.")
+
+            # Get the close prices of the most recent N periods and the N periods before those
+            current_prices = [period[4] for period in ohlcv[-N:]]
+            previous_prices = [period[4] for period in ohlcv[-2*N:-N]]
+
+            # Calculate the average price for each period
+            current_avg_price = sum(current_prices) / N
+            previous_avg_price = sum(previous_prices) / N
+
+            # Calculate the percent change
+            price_change = 100 * (current_avg_price -
+                                previous_avg_price) / previous_avg_price
+
+            # Determine market trend based on price change
+            if price_change > threshold:
+                return 'bull'
+            elif price_change < -threshold:
+                return 'bear'
+            else:
+                return 'neutral'
+        except Exception as e:
+            self.logger.error(f"Error get_short_term_market_trend: {str(e)}")
+            return None    
+        
+
+    async def get_macd(self, exchange, base, quote, short_period=12, long_period=26, signal_period=9, warmup=10):
+        """Calculate the Moving Average Convergence Divergence (MACD) indicator."""
+        try:
+            timeframe = '1m'
+            ohlcv = await self.get_history(exchange, base, quote, timeframe, long_period + signal_period + warmup)
+
+            if len(ohlcv) < long_period + signal_period + warmup:
+                raise ValueError(f"Not enough data to calculate MACD. Need {long_period + signal_period + warmup} periods, have {len(ohlcv)}.")
+
+            close_prices = pd.Series([x[4] for x in ohlcv])
+            macd = pta.macd(close_prices, short_period, long_period, signal_period)
+            macd_value = macd['MACD_12_26_9'].iloc[-1]
+            signal_value = macd['MACDs_12_26_9'].iloc[-1]
+            histogram_value = macd['MACDh_12_26_9'].iloc[-1]
+
+            return macd_value, signal_value, histogram_value
+        except Exception as e:
+            self.logger.error(f"Error get_macd: {str(e)}")
+            return None
+    
+
+    async def get_price_change(self, exchange, base, quote, timeframe='1m', limit=20):
+        """
+        Calculate the percent price change between the last N trades and the N trades before those.
+        """
+        N = limit // 2  # we'll consider the last N periods and the N periods before those
+
+        # Fetch OHLCV data
+        ohlcv = await self.get_history(exchange, base, quote, timeframe, limit)
+
+        # Ensure there are enough periods to calculate a change
+        if len(ohlcv) < 2*N:
+            return None
+
+        # Get the close prices of the most recent N periods and the N periods before those
+        current_prices = [period[4] for period in ohlcv[-N:]]
+        previous_prices = [period[4] for period in ohlcv[-2*N:-N]]
+
+        # Calculate the average price for each period
+        current_avg_price = sum(current_prices) / N
+        previous_avg_price = sum(previous_prices) / N
+
+        # Calculate the percent change
+        price_change = 100 * (current_avg_price -
+                              previous_avg_price) / previous_avg_price
+
+        return price_change
+
+    async def market_movement(self, exchange_id: str, base: str, quote: str, order_book_depth) -> Tuple[bool, str]:
+        """
+        Check if the market is experiencing a fast movement and determine the movement direction (bull or bear).
+        """
+
+        order_book = await self.get_order_book(exchange_id, base, quote)
+
+        depth_bids = sum([float(bid[0])
+                         for bid in order_book['bids'][:order_book_depth]])
+        depth_asks = sum([float(ask[0])
+                         for ask in order_book['asks'][:order_book_depth]])
+        #self.logger.info(f"depth_bids: {depth_bids}, depth_asks: {depth_asks}")
+
+        # Calculate the spread
+        spread = depth_asks - depth_bids
+
+        # Calculate the rate of spread change
+        spread_rate = (spread - self.previous_spread) / \
+            self.previous_spread if self.previous_spread != 0 else 0
+        #self.logger.info(f"spread_rate: {spread_rate}")
+
+        # Update previous spread
+        self.previous_spread = spread
+
+        # We can't exactly determine the direction with a single exchange,
+        # but we can use the spread rate as a proxy.
+        direction = "neutral"
+        if depth_bids > depth_asks:
+            direction = "bull"
+        else:
+            "bear"
+
+        # Check if the spread or price is changing rapidly
+        if abs(spread_rate) > self.spread_rate_threshold:
+            return "fast", direction
+
+        return "slow", direction
+
+    async def get_atr(self, exchange_id, base, quote, atr_period=14):
+        """Calculate the Average True Range (ATR) over a specified period."""
+        history_data = await self.get_history(exchange_id, base, quote, '1m', atr_period+1)
+        if len(history_data) < atr_period + 1:
+            self.logger.warning(
+                f"Not enough data to calculate ATR. Need {atr_period + 1} periods, have {len(history_data)}.")
+            return None
+        high = pd.Series([x[2] for x in history_data])
+        low = pd.Series([x[3] for x in history_data])
+        close = pd.Series([x[4] for x in history_data])
+        atr = pta.atr(high, low, close, length=atr_period)
+        return atr.iloc[-1]
+
+    async def get_24h_high(self, exchange_id, base, quote):
+        """
+        Calculate the 24-hour high.
+        """
+        history_data = await self.get_history(exchange_id, base, quote, '1m', 1440)
+        if len(history_data) < 1440:
+            self.logger.warning(
+                f"Not enough data to calculate 24h High. Need 1440 periods, have {len(history_data)}.")
+            return None
+        high = np.array([x[2] for x in history_data])
+        return np.max(high)
+
+    async def get_24h_low(self, exchange_id, base, quote):
+        """
+        Calculate the 24-hour low.
+        """
+        history_data = await self.get_history(exchange_id, base, quote, '1m', 1440)
+        if len(history_data) < 1440:
+            self.logger.warning(
+                f"Not enough data to calculate 24h Low. Need 1440 periods, have {len(history_data)}.")
+            return None
+        low = np.array([x[3] for x in history_data])
+        return np.min(low)
+
+    async def get_historical_volume(self, exchange_id: str, base: str, quote: str, timeframe, limit) -> float:
+        """
+
+        """
+        # If you have a different way to get the volume, please replace this line
+        ohlcv = await self.get_history(exchange_id, base, quote, timeframe, limit)
+
+        # Assume OHLCV data format is: [[timestamp, open, high, low, close, volume], ...]
+        volume = ohlcv[0][5]
+
+        return volume
+
+    async def get_current_volume(self, exchange_id: str, base: str, quote: str, depth: int = 10) -> Tuple[float, float]:
+        """
+        Calculate the total volume of the bid and ask orders up to a certain depth in the order book.
+        """
+        order_book = await self.get_order_book(exchange_id, base, quote)
+
+        bid_volume = sum(volume for price,
+                         volume in order_book['bids'][:depth])
+        ask_volume = sum(volume for price,
+                         volume in order_book['asks'][:depth])
+
+        return bid_volume, ask_volume
+
+    async def get_liquidity(self, exchange_id: str, base: str, quote: str) -> float:
+        """
+        Calculate the liquidity for the given exchange and market pair.
+        This is done by summing the volumes in the order book and dividing by the current price.
+        """
+        order_book = await self.get_order_book(exchange_id, base, quote)
+        bids = order_book['bids']
+        asks = order_book['asks']
+
+        bid_volume_sum = sum([volume for price, volume in bids])
+        ask_volume_sum = sum([volume for price, volume in asks])
+
+        liquidity = (bid_volume_sum + ask_volume_sum) / \
+            (bids[0][0] + asks[0][0]) / 2
+        normalized_liquidity = min(max(liquidity, 0), 1)  # Normalize to [0, 1]
+        return normalized_liquidity
+
+    async def get_volatility(self, exchange_id: str, base: str, quote: str) -> float:
+        """
+        Calculate the volatility based on the order book data.
+        """
+        order_book = await self.get_order_book(exchange_id, base, quote)
+        if order_book is None:
+            return 0.0
+
+        bids = order_book['bids']
+        asks = order_book['asks']
+
+        bid_prices = [price for price, _ in bids]
+        ask_prices = [price for price, _ in asks]
+
+        # Calculate the mid price as the average of the highest bid price and lowest ask price
+        mid_price = (max(bid_prices) + min(ask_prices)) / 2
+
+        # Calculate the price changes based on the mid price
+        price_changes = [abs(price - mid_price)
+                         for price in bid_prices + ask_prices]
+
+        # Calculate the volatility as the standard deviation of the price changes
+        volatility = np.std(price_changes)
+
+        return volatility
+
+    async def get_past_performance(self, exchange: str, base: str, quote: str, lookback_period: int = 24) -> float:
+        """
+        Calculate the past performance for the given exchange and market pair.
+        This is done by comparing the current price to the price a specified number of periods ago.
+        """
+
+        # Fetch historical data
+        timeframe = "1m"
+        limit = lookback_period
+        historical_data = await self.get_history(exchange, base, quote, timeframe, limit)
+
+        # Assume historical data format is: [[timestamp, open, high, low, close, volume], ...]
+        current_price = historical_data[0][4]
+        past_price = historical_data[-1][4]
+
+        # Calculate performance as percent change from past to current
+        performance = (current_price - past_price) / past_price
+
+        # Normalize performances to [0, 1]
+        normalized_performance = (performance + 1) / 2
+
+        return normalized_performance
+
+    # @lru_cache(maxsize=None)
+    async def get_order_book(self, exchange_id: str, base: str, quote: str) -> dict:
+        order_book = await self.api_manager.get_order_book(
+            exchange_id, base, quote)
+        return order_book
+
+    # @lru_cache(maxsize=None)
+    async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> dict:
+        trading_volume = await self.api_manager.get_trading_volume(
+            exchange_id, base, quote)
+        return trading_volume
+
+    # @lru_cache(maxsize=None)
+    async def get_history(self, exchange_id: str, base: str, quote: str, timeframe, limit) -> dict:
+        history_data = await self.api_manager.get_ohlcv_history(
+            exchange_id, base, quote, timeframe, None, limit)
+        return history_data
+
+    # @lru_cache(maxsize=None)
+    async def get_trade_history(self, exchange_id: str, base: str, quote: str) -> dict:
+        history_trade_data = await self.api_manager.get_trades_history(
+            exchange_id, base, quote)
+        return history_trade_data
+
+    def percentage_difference(self, value1, value2):
+        return abs((value1 - value2) / ((value1 + value2) / 2)) * 100

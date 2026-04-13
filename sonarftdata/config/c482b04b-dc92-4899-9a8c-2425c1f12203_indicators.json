@@ -1,0 +1,24 @@
+{
+    "periods": {
+        "5min": true,
+        "15min": false,
+        "30min": false,
+        "45min": false,
+        "1h": false
+    },
+    "oscillators": {
+        "Relative Strength Index (14)": true,
+        "Stochastic %K (14, 3, 3)": true,
+        "MACD Level (12, 26)": true,
+        "Stochastic RSI Fast (3, 3, 14, 14)": false,
+        "Momentum (10)": false,
+        "Awesome Oscillator": false
+    },
+    "movingaverages": {
+        "Exponential Moving Average (10)": true,
+        "Simple Moving Average (10)": true,
+        "Exponential Moving Average (30)": true,
+        "Simple Moving Average (30)": false,
+        "Ichimoku Base Line (9, 26, 52, 26)": true
+    }
+}

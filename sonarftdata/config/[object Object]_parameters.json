@@ -1,0 +1,11 @@
+{
+    "exchanges": {
+        "Binance": true,
+        "Okx": true,
+        "Kraken": true
+    },
+    "symbols": {
+        "BTC/USDT": true,
+        "ETH/USDT": true
+    }
+}

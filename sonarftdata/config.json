@@ -1,0 +1,34 @@
+{
+    "config_1": [
+        {
+            "markets_pathname": "sonarftdata/config_markets.json",
+            "markets_setup": 1,
+            "exchanges_pathname": "sonarftdata/config_exchanges.json",
+            "exchanges_setup": 1,
+            "symbols_pathname": "sonarftdata/config_symbols.json",
+            "symbols_setup": 1,
+            "indicators_pathname": "sonarftdata/config_indicators.json",
+            "indicators_setup": 1,            
+            "parameters_pathname": "sonarftdata/config_parameters.json",
+            "parameters_setup": 1,
+            "fees_pathname": "sonarftdata/config_fees.json",
+            "fees_setup": 1
+        }
+    ],
+    "config_2": [
+        {
+            "markets_pathname": "sonarftdata/config_markets.json",
+            "markets_setup": 1,
+            "exchanges_pathname": "sonarftdata/config_exchanges.json",
+            "exchanges_setup": 1,
+            "symbols_pathname": "sonarftdata/config_symbols.json",
+            "symbols_setup": 1,
+            "indicators_pathname": "sonarftdata/config_indicators.json",
+            "indicators_setup": 1,            
+            "parameters_pathname": "sonarftdata/config_parameters.json",
+            "parameters_setup": 1,
+            "fees_pathname": "sonarftdata/config_fees.json",
+            "fees_setup": 1
+        }
+    ]
+}

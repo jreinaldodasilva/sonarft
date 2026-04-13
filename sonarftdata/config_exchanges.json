@@ -1,0 +1,6 @@
+{
+    "exchanges_1": ["okx", "binance"],
+    "exchanges_2": ["okx", "bitfinex"],
+    "exchanges_3": ["okx", "binance", "bitfinex"]
+
+}

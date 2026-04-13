@@ -1,0 +1,5 @@
+{
+    "indicators_1": ["rsi"],
+    "indicators_2": ["stoch rsi"],
+    "indicators_3": ["rsi, stoch rsi"]
+}
