@@ -467,5 +467,321 @@ For the most useful results, ask the AI to:
 - quote exact logic only when necessary and within copyright-safe limits
 - avoid vague claims
 - produce Markdown that can be saved directly as documentation
+
+---
+
+# Roadmap Generation Prompt — Fixes & Improvements Implementation Plan
+
+Use this prompt **after all review documents have been generated**. This prompt creates a structured execution roadmap to fix issues and implement improvements identified during the audit.
+
+## Master Roadmap Prompt
+
+```text
+You are a senior technical program manager, software architect, and quantitative trading system reviewer.
+
+Your job is to generate a **comprehensive technical roadmap** based on previously generated review documents.
+
+Inputs:
+- All review documents under docs/
+- All findings, risks, and recommendations
+- All severity classifications
+- All performance, security, and trading safety issues
+
+Your objective is to transform findings into an **actionable engineering roadmap** that can be executed by developers.
+
+Important rules:
+- Convert problems into implementation tasks
+- Group related fixes into logical phases
+- Order tasks by risk reduction priority
+- Include dependencies between tasks
+- Provide realistic execution sequencing
+- Clearly separate mandatory fixes from optional improvements
+- Focus strongly on trading safety and financial correctness
+
+Never invent issues that were not identified.
+If something lacks enough detail, write:
+"⚠️ Requires Engineering Clarification"
 ```
+
+---
+
+## Roadmap Construction Requirements
+
+Generate the roadmap using the following structure.
+
+### 1. Executive Roadmap Summary
+
+Provide:
+- Overall system readiness status
+- Estimated total effort level (Small / Medium / Large / Enterprise)
+- Estimated number of implementation phases
+- Primary risk domains (e.g., async safety, trading logic, security)
+- Top architectural priorities
+
+---
+
+### 2. Issue-to-Task Conversion Matrix
+
+Convert each issue into an actionable development task.
+
+For each issue include:
+
+| Field | Description |
+|------|-------------|
+| Issue ID | Unique identifier |
+| Source Document | File where issue originated |
+| Affected Files | File names |
+| Severity | Low / Medium / High / Critical |
+| Task Description | Concrete engineering work |
+| Risk Category | Trading / Async / Security / Performance / Architecture |
+| Fix Complexity | Low / Medium / High |
+| Estimated Effort | Hours or Days |
+| Dependencies | Other tasks required first |
+| Validation Method | How correctness will be verified |
+
+---
+
+### 3. Phase-Based Implementation Plan
+
+Group tasks into **phases** based on priority and dependencies.
+
+Required phase categories:
+
+Phase 0 — Critical Safety Fixes
+Focus on:
+- trading correctness
+- financial math safety
+- execution safety
+- fatal runtime risks
+
+Phase 1 — Stability & Reliability
+Focus on:
+- async correctness
+- error handling
+- concurrency stability
+- data validation
+
+Phase 2 — Security Hardening
+Focus on:
+- secret protection
+- configuration safety
+- API reliability
+
+Phase 3 — Performance Optimization
+Focus on:
+- latency
+- memory usage
+- concurrency scaling
+
+Phase 4 — Architecture Improvements
+Focus on:
+- modularization
+- separation of concerns
+- dependency cleanup
+
+Phase 5 — Feature & Strategy Enhancements
+Focus on:
+- indicator optimization
+- new trading logic improvements
+
+For each phase include:
+
+- Phase Objective
+- Tasks Included
+- Risk Reduction Impact
+- Expected Stability Gains
+- Exit Criteria
+
+---
+
+### 4. Dependency Graph
+
+Create a dependency relationship summary between tasks.
+
+Include:
+- Task prerequisites
+- Blocking relationships
+- Parallelizable tasks
+
+Use a Mermaid diagram when helpful.
+
+---
+
+### 5. Risk Reduction Mapping
+
+Map each phase to risk reduction outcomes.
+
+Include:
+
+| Phase | Risk Before | Risk After | Impact Level |
+|------|-------------|-------------|--------------|
+
+Focus especially on:
+- financial loss risks
+- incorrect trading decisions
+- concurrency failure risks
+
+---
+
+### 6. Effort & Timeline Estimation
+
+Estimate development effort.
+
+Include:
+
+| Phase | Effort (Days) | Team Size | Duration Estimate |
+|------|----------------|------------|-------------------|
+
+Provide:
+- conservative estimate
+- aggressive estimate
+- recommended team size
+
+---
+
+### 7. Technical Debt Backlog
+
+Create a backlog of lower-priority improvements.
+
+Include:
+
+- refactoring tasks
+- documentation gaps
+- test improvements
+- logging improvements
+
+Each item must include:
+- priority score
+- implementation benefit
+- recommended timeline window
+
+---
+
+### 8. Testing & Validation Roadmap
+
+Define how each phase will be validated.
+
+Include:
+
+- unit test targets
+- integration test targets
+- simulation tests
+- regression tests
+- load tests
+
+Include specific validation strategies for:
+
+- trading logic correctness
+- async task safety
+- financial calculations
+- exchange execution behavior
+
+---
+
+### 9. Release Strategy Plan
+
+Define staged release readiness milestones.
+
+Required milestones:
+
+Milestone A — Safe Simulation Mode
+Milestone B — Controlled Paper Trading
+Milestone C — Limited Real Trading
+Milestone D — Production Deployment
+
+For each milestone include:
+
+- readiness requirements
+- blocking issues
+- validation criteria
+- rollback strategy
+
+---
+
+### 10. Success Metrics Definition
+
+Define measurable system-quality metrics.
+
+Examples:
+
+- trade success accuracy
+- execution latency
+- error rate
+- memory growth rate
+- recovery success rate
+- profitability signal correctness
+
+Each metric must include:
+
+- measurement method
+- acceptable thresholds
+- monitoring frequency
+
+---
+
+## Final Roadmap Output Document
+
+The roadmap must be saved as:
+
+`docs/roadmap/implementation-roadmap.md`
+
+---
+
+## Required Roadmap Output Format
+
+```text
+# Implementation Roadmap — SonarFT
+
+## Executive Summary
+
+## Issue Conversion Matrix
+
+## Phase-Based Implementation Plan
+
+## Dependency Graph
+
+## Risk Reduction Mapping
+
+## Effort & Timeline Estimation
+
+## Technical Debt Backlog
+
+## Testing & Validation Strategy
+
+## Release Strategy
+
+## Success Metrics
+
+## Final Implementation Priorities
+
+## Conclusion
+```
+
+---
+
+## Optional Advanced Roadmap Extension (Recommended)
+
+If sufficient data exists, also generate:
+
+- Gantt-style execution timeline
+- Sprint-ready task breakdown
+- Risk heatmap visualization
+- Developer role assignment suggestions
+- CI/CD pipeline upgrade recommendations
+
+Output optional extensions to:
+
+`docs/roadmap/advanced-execution-plan.md`
+
+---
+
+## Usage Recommendation
+
+Run this roadmap prompt **only after all review documents are completed**.
+
+This ensures:
+- all issues are accounted for
+- priorities are correct
+- roadmap sequencing is accurate
+- engineering effort is realistic
 
