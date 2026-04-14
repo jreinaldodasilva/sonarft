@@ -27,16 +27,16 @@ services:
       - traefik.http.routers.api.middlewares=dashboard-auth
       - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_USERS}"
 
-  sonarftbot:
-    image: sonarftbot:latest
+  sonarft:
+    image: sonarft:latest
     volumes:
       - sonarft_history:/app/sonarftdata/history
       - sonarft_bots:/app/sonarftdata/bots
     labels:
-      - traefik.http.routers.sonarftbot.rule=Host(`sonarft.com`)
-      - traefik.http.routers.sonarftbot.entrypoints=websecure
-      - traefik.http.routers.sonarftbot.tls.certresolver=myresolver
-      - traefik.http.services.sonarftbot.loadbalancer.server.port=5000
+      - traefik.http.routers.sonarft.rule=Host(`sonarft.com`)
+      - traefik.http.routers.sonarft.entrypoints=websecure
+      - traefik.http.routers.sonarft.tls.certresolver=myresolver
+      - traefik.http.services.sonarft.loadbalancer.server.port=5000
 
 volumes:
   sonarft_history:

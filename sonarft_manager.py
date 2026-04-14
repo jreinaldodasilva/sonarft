@@ -68,22 +68,22 @@ class BotManager:
 
     async def set_update(self, botid, update_data) -> bool:
         async with self._lock:
-            sonarftbot = self._get_bot_unsafe(botid)
-            if not sonarftbot:
+            sonarft = self._get_bot_unsafe(botid)
+            if not sonarft:
                 if self.logger:
                     self.logger.warning(f"Bot {botid} not found. Update failed.")
                 return False
-            sonarftbot.set_update(update_data)
+            sonarft.set_update(update_data)
             return True
 
     async def get_update(self, botid):
         async with self._lock:
-            sonarftbot = self._get_bot_unsafe(botid)
-            if not sonarftbot:
+            sonarft = self._get_bot_unsafe(botid)
+            if not sonarft:
                 if self.logger:
                     self.logger.warning(f"Bot {botid} not found. Cannot get update.")
                 return None
-            return sonarftbot.get_update()
+            return sonarft.get_update()
 
     def get_botids(self, client_id):
         """
@@ -135,11 +135,11 @@ class BotManager:
         try:
 
             # Create a new bot instance
-            sonarftbot = SonarftBot(args.library, logger=self.logger)
-            botid = await sonarftbot.create_bot(args.config)
+            sonarft = SonarftBot(args.library, logger=self.logger)
+            botid = await sonarft.create_bot(args.config)
 
             # Store the new bot instance and the botid
-            await self.add_bot_instance(client_id, botid, sonarftbot)
+            await self.add_bot_instance(client_id, botid, sonarft)
             self.logger.info(
                 f"Bot: {botid} successfully stored for client: {client_id}."
             )
@@ -158,18 +158,18 @@ class BotManager:
         Run the created bot.
 
         Parameters:
-        sonarftbot
+        sonarft
         botid 
         """
         try:
             # Run the bot
-            sonarftbot = await self.get_bot_instance(botid)
-            self.logger.info(f"Running {sonarftbot} - {botid}")
-            if not sonarftbot:
+            sonarft = await self.get_bot_instance(botid)
+            self.logger.info(f"Running {sonarft} - {botid}")
+            if not sonarft:
                 return
 
-            await sonarftbot.run_bot()
-            sonarftbot.stop_bot_flag = False
+            await sonarft.run_bot()
+            sonarft.stop_bot_flag = False
         except BotRunError as error:
             self.logger.error(f"Bot run error: {error}")
             if botid:
@@ -182,9 +182,9 @@ class BotManager:
         Parameters:
         botid (str): The unique identifier for the bot.
         """
-        sonarftbot = await self.get_bot_instance(botid)
-        self.logger.info(f"Removing {sonarftbot} - {botid}")
-        if not sonarftbot:
+        sonarft = await self.get_bot_instance(botid)
+        self.logger.info(f"Removing {sonarft} - {botid}")
+        if not sonarft:
             return
 
         await self.remove_bot_instance(botid)

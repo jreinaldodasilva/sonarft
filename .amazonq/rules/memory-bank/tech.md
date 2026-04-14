@@ -53,7 +53,7 @@ python sonarft.py
 python sonarft.py -c config_2 -l ccxt
 
 # Build Docker image
-docker build -t sonarftbot:latest .
+docker build -t sonarft:latest .
 
 # Run with Docker Compose
 docker-compose up

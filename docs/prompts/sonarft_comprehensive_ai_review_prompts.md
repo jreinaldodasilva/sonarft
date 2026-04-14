@@ -1,787 +1,1490 @@
-# SonarFT — Comprehensive AI Code Review Prompt Suite
+# sonarft — Comprehensive AI Code Review Prompt Suite
 
-Use this prompt suite to review the SonarFT Python crypto-trading codebase and generate structured documentation. The suite is designed for an AI reviewer and follows the modular-document style of the reference review document, but adapted to SonarFT’s async trading architecture, VWAP logic, indicator pipeline, execution flow, and configuration-driven design.
+A complete framework for conducting structured, in-depth AI-assisted code reviews of the sonarft cryptocurrency trading system. This suite generates professional documentation covering architecture, trading safety, execution integrity, security, performance, and operational readiness.
+
+---
+
+## Quick Start Guide
+
+**New to this prompt suite?** Start here:
+
+1. **For a Quick Audit** (30 min): Use only [Prompt 10: Code Quality & Testing](#prompt-10--code-quality-testing--refactoring-review)
+2. **For a Complete System Audit** (2-3 hours): Run all 10 review prompts in sequence (Prompts 1-10)
+3. **For Production Readiness** (4-5 hours): Complete all reviews + [Final Audit](#final-consolidation-prompt) + [Implementation Roadmap](#roadmap-generation-prompt--fixes--improvements-implementation-plan)
+4. **For Operations/Deployment Teams**: Skip to [Setup & Execution Guide](#setup-execution--operational-modes-guide-prompt)
+
+**Typical Workflow:**
+- Generate all review documents (1-2 hours for AI)
+- Review findings and prioritize (~2-4 hours for human review)  
+- Generate implementation roadmap (~30 minutes)
+- Create sprint plan and deploy improvements
+
+---
+
+## Table of Contents
+
+### Core Sections
+1. [Master Instruction](#master-instruction) — Foundational guidance for all reviews
+2. [Code Review Prompts](#code-review-prompts) — 10 detailed specialized reviews
+
+### Review Prompts (Pick What You Need)
+- [Prompt 1: Architecture & Project Structure](#prompt-1--architecture--project-structure)
+- [Prompt 2: Async Design & Concurrency](#prompt-2--async-design--concurrency-review)
+- [Prompt 3: Trading Engine & Strategy Logic](#prompt-3--trading-engine--strategy-logic-review)
+- [Prompt 4: Financial Math & Precision](#prompt-4--financial-math--precision-review)
+- [Prompt 5: Indicator Pipeline](#prompt-5--indicator-pipeline-review)
+- [Prompt 6: Execution & Exchange Integration](#prompt-6--execution--exchange-integration-review)
+- [Prompt 7: Configuration & Runtime Environment](#prompt-7--configuration--runtime-environment-review)
+- [Prompt 8: Security & Trading Risk](#prompt-8--security--trading-risk-review)
+- [Prompt 9: Performance & Scalability](#prompt-9--performance--scalability-review)
+- [Prompt 10: Code Quality & Testing](#prompt-10--code-quality-testing--refactoring-review)
+
+### Post-Review Artifacts
+3. [Final Consolidation Prompt](#final-consolidation-prompt) — Executive summary across all reviews
+4. [Implementation Roadmap](#roadmap-generation-prompt--fixes--improvements-implementation-plan) — Structured execution plan
+5. [Setup & Operations Guide](#setup-execution--operational-modes-guide-prompt) — Deployment and operations instructions
 
 ---
 
 ## Master Instruction
 
+Copy this instruction into your prompt to establish context for all code reviews:
+
 ```text
 You are a senior Python engineer, async systems architect, quantitative trading reviewer, and security auditor.
 
-Your job is to review the uploaded SonarFT codebase and produce professional Markdown documentation.
+Your job is to review the uploaded sonarft codebase and produce professional Markdown documentation.
 
-SonarFT is an async-first cryptocurrency trading system with:
+sonarft is an async-first cryptocurrency trading system with:
 - multi-bot concurrency
-- multi-exchange support
-- VWAP-based pricing
+- multi-exchange support (via CCXT/CCXTpro)
+- VWAP-based pricing logic
 - technical indicators (RSI, MACD, Stochastic, SMA, volatility)
-- simulation/paper-trading mode
+- simulation/paper-trading and live trading modes
 - JSON-based configuration
-- FastAPI/WebSocket server
-- ccxt / ccxtpro integration
-- Docker deployment
+- FastAPI/WebSocket server infrastructure
+- ccxt / ccxtpro integration for exchange connectivity
+- Docker deployment support
 
 You must analyze the code with special attention to:
-- correctness
-- trading safety
-- async integrity
-- financial precision
-- architecture quality
-- security
-- performance
-- testability
+- correctness and logic soundness
+- trading safety and financial risk
+- async integrity and task management
+- financial precision and calculation accuracy
+- architecture quality and modularity
+- security vulnerabilities and exposure
+- performance and scalability characteristics
+- testability and code maintainability
 
 Important rules:
-- Do not guess. If something is not present in the code, write: “⚠️ Not Found in Source Code”.
-- Cite specific files, classes, and functions whenever possible.
-- Prefer tables, bullet-free sections, and diagrams where useful.
-- Generate documentation in Markdown.
-- Include Mermaid diagrams when they improve understanding.
-- Rank risks by severity: Low, Medium, High, Critical.
-- Provide concrete remediation steps, not only observations.
-- Separate confirmed issues from assumptions.
+- Do not guess or fabricate details. If something is not present in the code, write: "⚠️ Not Found in Source Code"
+- Cite specific files, classes, and functions whenever possible
+- Use tables, diagrams, and structured formats for clarity
+- Generate all documentation in proper Markdown
+- Include Mermaid diagrams when they improve understanding
+- Rank risks by severity: Low, Medium, High, Critical
+- Provide concrete remediation steps, not vague observations
+- Clearly separate confirmed issues from assumptions or questions
 
 Each review prompt below must produce a separate Markdown document.
+When working through multiple prompts, maintain consistency in terminology and risk ratings across all documents.
 ```
+
+---
+
+## Code Review Prompts
 
 ---
 
 ## Prompt 1 — Architecture & Project Structure
 
+**Goal**: Understand the overall system organization, technology stack, and module design
+
+**Output File**: `docs/architecture/overview.md`
+
 ```text
-Analyze the SonarFT project architecture and explain how the system is organized.
+Analyze the sonarft project architecture and explain how the system is organized.
 
-Cover the following:
-1. Technology stack inventory
-   - Python runtime
-   - async libraries
-   - FastAPI
-   - pandas / pandas-ta
-   - ccxt / ccxtpro
-   - Docker
-   - logging approach
-   - configuration files
+Cover the following areas:
 
-2. Project structure
-   - describe each main module
-   - explain responsibility boundaries
-   - identify orchestration, strategy, analysis, infrastructure, and transport layers
-   - note where responsibilities overlap or leak
+### 1. Technology Stack Inventory
 
-3. Dependency design
-   - confirm whether modules use dependency injection
-   - detect tight coupling
-   - identify circular or implicit dependencies
+List all major dependencies and technologies:
+- Python runtime version and compatibility
+- Async framework libraries (asyncio, others)
+- HTTP/API framework (FastAPI or similar)
+- Financial data processing (pandas, pandas-ta, numpy)
+- Exchange integration (ccxt, ccxtpro versions)
+- Container technology (Docker version/base images)
+- Logging approach and libraries
+- Configuration file format and validation
 
-4. Documentation output
-   - include a compact architecture summary
-   - include a Mermaid diagram of the main module relationships
-   - include a table for module responsibility mapping
-   - highlight large or high-complexity files
+### 2. Project Structure & Module Responsibilities
 
-Output document:
-`docs/architecture/overview.md`
+For each major Python module, describe:
+- **Module name** and primary file(s)
+- **Responsibility** (one sentence)
+- **Key classes and functions**
+- **Dependencies** (what it imports/depends on)
+- **Responsibility boundaries** (what it does NOT do)
+
+Key modules to analyze:
+- API management layer (exchange connectivity)
+- Configuration and runtime setup
+- Strategy/search logic
+- Execution engine
+- Technical indicators system
+- Price calculation system
+- Math utilities
+- Validation and safety checks
+- Helper utilities
+- Boss/orchestration layer
+
+For each, identify:
+- Does it mix concerns (trading logic + API calls, etc.)?
+- Is there a clear dependency direction?
+- Are responsibilities well-isolated?
+
+### 3. Dependency Design Analysis
+
+Examine:
+- Are dependencies injected or hardcoded?
+- Are there circular dependencies?
+- Is there tight coupling between modules?
+- What modules could be reused independently?
+- What implicit dependencies exist (globals, imports)?
+
+### 4. System Architecture Diagram
+
+Create a Mermaid diagram showing:
+- Major modules as boxes
+- Dependency arrows between modules
+- Direction of data/control flow
+- Layering (if present: transport, API, logic, calculation layers)
+
+### 5. Module Responsibility Matrix
+
+Create a table:
+
+| Module | Primary Responsibility | Key Dependencies | Coupling Level | Code Complexity |
+|--------|----------------------|-----------------|----------------|-----------------|
+
+### 6. Code Complexity Hotspots
+
+Identify files with:
+- Highest line count
+- Most complexity (nested logic, many functions)
+- Most dependencies
+- Most concurrent operations
+
+Report findings with file names and line ranges.
+
+### 7. Conclusion
+
+Summarize:
+- Overall architectural clarity
+- Obvious design patterns (if present)
+- Mixing of concerns
+- Modularity strengths and weaknesses
+- Recommendations for structural improvement
 ```
 
 ---
 
 ## Prompt 2 — Async Design & Concurrency Review
 
+**Goal**: Verify async/await correctness and identify concurrency risks
+
+**Output File**: `docs/architecture/async-concurrency.md`
+
 ```text
-Review all async behavior in the SonarFT codebase.
+Review all async behavior in the sonarft codebase.
 
-Focus on:
-- async/await correctness
-- blocking operations inside async functions
-- use of asyncio.gather
-- use of asyncio.create_task
-- asyncio.Lock for shared mutable state
-- WebSocket concurrency and message handling
-- task cleanup and cancellation
-- race conditions and deadlock risks
-- long-running loop behavior
+Focus on these critical async patterns and risks:
 
-For each issue, state:
-- file
-- function
-- what happens
-- why it matters
-- how to fix it
+### 1. Async/Await Correctness
 
-Add:
-- a concurrency risk table
-- a task lifecycle summary
-- a Mermaid sequence or flow diagram if helpful
+Examine every async function and report:
+- **Async function name** and location
+- **What it does** (one sentence)
+- **Awaited calls** (list every await, confirm it's awaited properly)
+- **Non-awaited coroutines** (are any coroutines created but not awaited?)
+- **Blocking operations inside async functions** (file I/O, network calls, expensive computation)
+- **Risk level** (None / Low / Medium / High)
 
-Output document:
-`docs/architecture/async-concurrency.md`
+Common issues to find:
+- Creating async tasks/coroutines without `await` or `.create_task()`
+- Calling thread-blocking functions (time.sleep, blocking file I/O) inside async code
+- No exception handling for task creation/awaiting
+- Tasks that never complete or garbage-collect
+- Race conditions on shared state
+
+### 2. Task Management Analysis
+
+Examine:
+- **Task creation patterns** (asyncio.create_task, gather, etc.)
+- **Task cleanup** (are tasks cancelled and awaited on shutdown?)
+- **Dangling tasks** (any tasks that may be abandoned?)
+- **Task cancellation handling** (CancelledError caught and handled?)
+- **Long-running loops** (any while True loops? Do they yield control?)
+
+### 3. Concurrency Synchronization
+
+Check:
+- **Shared mutable state** (what global/class variables are shared?)
+- **Lock usage** (asyncio.Lock for critical sections?)
+- **Deadlock risks** (any scenarios where locks could deadlock?)
+- **Race conditions** (any concurrent access to shared data without locks?)
+- **WebSocket message concurrency** (how are concurrent messages handled?)
+
+### 4. Async/Await Error Handling
+
+Verify:
+- Are exceptions in tasks propagated or silently lost?
+- Are timeout scenarios handled?
+- Is connection loss handled gracefully?
+- Can the system recover from failed async operations?
+
+### 5. Concurrency Risk Table
+
+Create a table of all concurrency concerns:
+
+| Location | Pattern | Risk | Severity | Remediation |
+|----------|---------|------|----------|------------|
+
+### 6. Task Lifecycle Summary
+
+Document:
+- How tasks are created
+- How they are monitored
+- When they are cancelled
+- How they are cleaned up
+- Any edge cases in the lifecycle
+
+### 7. Concurrency Flow Diagram
+
+Create a Mermaid sequence or flowchart showing:
+- Typical execution flow
+- Where concurrency occurs
+- Task creation and joining points
+- Critical sections
+
+### 8. Recommendations
+
+Identify:
+- Critical async bugs
+- Refactoring opportunities
+- Best-practice improvements
 ```
 
 ---
 
 ## Prompt 3 — Trading Engine & Strategy Logic Review
 
+**Goal**: Verify trading logic correctness and safety for financial execution
+
+**Output File**: `docs/trading/trading-engine-analysis.md`
+
 ```text
-Review the core trading logic in SonarFT as a financial-safety-critical system.
+Review the core trading logic in sonarft as a financial-safety-critical system.
+
+This review focuses on correctness of trading decisions and execution safety.
+
+### 1. Trade Detection Logic
 
 Analyze:
-- VWAP calculations
-- spread calculations
-- trade opportunity detection
-- fee handling
-- buy/sell trigger logic
-- execution gating
-- simulation mode behavior
-- profit-threshold logic
-- order sizing and rounding
-- price adjustment rules based on market conditions
+- **Where trade opportunities are detected** (file and function)
+- **Signals used** (which indicators/conditions trigger trades?)
+- **Profitability calculation** (how is profit threshold computed?)
+- **Risk of false positives** (could a bad signal trigger unwanted trades?)
+- **Margin of safety** (how much buffer is there before executing?)
 
-Verify whether the code correctly:
-- avoids zero-division
-- uses the proper OHLCV indices
-- includes fees before deciding profitability
-- protects against false-positive opportunities
-- prevents accidental live execution in simulation mode
+### 2. VWAP Calculation & Usage
 
-Deliverables:
-- trade pipeline summary
-- risk table
-- Mermaid flowchart of the trading loop
-- list of critical logic flaws with severity
+Examine:
+- **VWAP formula implementation** (is it correct?)
+- **Data sources** (volume data consistency?)
+- **Edge cases** (zero volume handling, missing data?)
+- **Usage in pricing** (where is VWAP used for price decisions?)
+- **Precision** (floating-point vs Decimal usage?)
 
-Output document:
-`docs/trading/trading-engine-analysis.md`
+### 3. Spread Calculation & Rules
+
+Review:
+- **Spread definition** (how is it calculated?)
+- **Spread thresholds** (where are limits enforced?)
+- **Profitability thresholds** (how much spread is required for profit?)
+- **Risk adjustment** (does spread change with market volatility?)
+
+### 4. Fee Handling & Profitability
+
+Verify:
+- **Exchange fees included** (are buy/sell fees deducted?)
+- **Fee timing** (are fees included BEFORE deciding profitability or AFTER?)
+- **Fee accuracy** (do fee computations match exchange specs?)
+- **Net profit calculation** (is final profit correctly computed with all fees?)
+
+### 5. Execution Gating & Safety Checks
+
+Examine:
+- **Pre-execution validation** (what checks happen before trade?)
+- **Simulation mode gates** (is live trading prevented in simulation?)
+- **Safety thresholds** (maximum loss, maximum position size?)
+- **Operator controls** (can a human stop/pause execution?)
+- **Risk of accidental live execution** (what could cause unintended real trades?)
+
+### 6. Buy/Sell Trigger Logic
+
+For each trade direction (buy/sell), document:
+- **Entry signal** (what conditions trigger?)
+- **Entry validation** (what prevents bad entries?)
+- **Exit signal** (how is exit decided?)
+- **Exit validation** (what guarantees safe exit?)
+- **Order size calculation** (how much to trade?)
+
+### 7. Rounding & Precision in Orders
+
+Check:
+- **Amount rounding** (how is order amount rounded?)
+- **Price rounding** (how is order price rounded?)
+- **Exchange minimums** (are minimums enforced?)
+- **Precision loss** (can rounding cause profit loss?)
+
+### 8. Trade Pipeline Flowchart
+
+Create a Mermaid flowchart showing:
+- Signal generation → Detection → Validation → Execution → Completion
+- Decision branches and gating logic
+- Risk checks and safeguards
+
+### 9. Financial Risk Table
+
+Create a table of trading safety issues:
+
+| Issue | Location | Scenario | Financial Risk | Severity | Fix |
+|-------|----------|----------|----------------|----------|-----|
+
+### 10. Critical Logic Findings
+
+List any critical defects:
+- Logic that could cause incorrect trade decisions
+- Safety gates that don't work
+- Edge cases that break the system
+- Fee handling errors
 ```
 
 ---
 
 ## Prompt 4 — Financial Math & Precision Review
 
+**Goal**: Audit all financial calculations for correctness and precision
+
+**Output File**: `docs/trading/financial-math-review.md`
+
 ```text
-Audit all financial calculations in SonarFT.
+Audit all financial calculations in sonarft with a focus on precision and correctness.
+
+Financial systems MUST be precise. Rounding errors multiply across thousands of trades.
+
+### 1. Precision Settings Inventory
+
+Examine the code for:
+- **Decimal precision setup** (is getcontext().prec set? Where?)
+- **Which operations use Decimal vs float** (should all monetary amounts use Decimal?)
+- **Float contamination risk** (where do floats leak into calculations?)
+- **Rounding strategy** (where is rounding explicit? Where is it implicit?)
+
+### 2. Financial Calculation Audit
+
+For each calculation in the system, verify:
+
+| Calculation | Location | Uses Decimal? | Rounding Strategy | Edge Cases | Risk Level |
+|-------------|----------|---------------|-------------------|------------|-----------|
+
+Calculations to check:
+- VWAP computations
+- Spread calculations
+- Fee deductions
+- Profit/loss calculations
+- Order sizing and amount computations
+- Price adjustments
+- Exchange minimum requirements
+
+### 3. Precision-Sensitive Functions
+
+List all functions that touch money:
+- **Function name and location**
+- **Input types** (Decimal, float, int, string?)
+- **Output types**
+- **Any rounding or precision loss?**
+- **Any assumptions about input precision?**
+
+### 4. Fee Computation Accuracy
+
+Verify for each exchange:
+- **Is fee calculation correct?** (taker vs maker fees?)
+- **Is fee applied before or after spreading?**
+- **Does fee change with market conditions?**
+- **Are fees included in profit calculation?**
+- **Example calculation** (with numbers proving correctness)
+
+### 5. Profit Calculation Deep Dive
+
+For the profit threshold logic:
+- **Formula** (show exact calculation)
+- **Inputs** (buy price, sell price, amount, fees)
+- **Example** (concrete example with numbers)
+- **Edge cases** (very small amounts, very tight spreads, high fees)
+- **Risks** (what math errors could occur?)
+
+### 6. Order Book & Aggregation Math
+
+If order books are aggregated:
+- **Aggregation formula** (volume-weighted or simple average?)
+- **Precision in aggregation**
+- **Edge cases** (missing levels, size limits?)
+
+### 7. Rounding Edge Cases
+
+Document:
+- When rounding happens (too early? too late?)
+- Impact of rounding (profit/loss?)
+- Examples of rounding errors
+- Recommendations for fixing rounding
+
+### 8. Exchange-Specific Precision Rules
+
+For each exchange, verify:
+- **Minimum amount** (what's the smallest order?)
+- **Amount precision** (decimal places allowed?)
+- **Price precision** (decimal places allowed?)
+- **Code enforcement** (are these rules checked in the code?)
+
+### 9. Numerical Stability Issues
 
 Check:
-- use of Decimal and precision settings
-- float contamination in financial paths
-- rounding strategy per exchange
-- fee computation accuracy
-- profit computation accuracy
-- precision loss in price and amount calculations
-- order book aggregation math
+- Zero-division risks (any 1/x operations?)
+- Overflow risks (numbers getting very large?)
+- Underflow risks (numbers getting very small?)
+- NaN/Inf risks (when could these occur?)
 
-Identify:
-- where calculations may drift
-- where exchange-specific precision rules are missing or inconsistent
-- where rounding happens too early or too late
+### 10. Precision Audit Table
 
-Include:
-- a table of all precision-sensitive functions
-- a list of numerical edge cases
-- remediation advice for each issue
+| Function | Issue | Severity | Example | Fix |
+|----------|-------|----------|---------|-----|
 
-Output document:
-`docs/trading/financial-math-review.md`
+### 11. Conclusion & Remediation
+
+Summarize:
+- Overall precision safety
+- Critical fixes needed
+- Recommendations for systematic improvement
 ```
 
 ---
 
 ## Prompt 5 — Indicator Pipeline Review
 
-```text
-Review the indicator subsystem in SonarFT.
+**Goal**: Verify indicator calculations and signal generation correctness
 
-Inspect:
-- RSI
-- MACD
-- Stochastic indicators
-- SMA
-- volatility calculations
-- support/resistance or trend helpers
-- OHLCV preprocessing
-- pandas-ta usage
+**Output File**: `docs/trading/indicator-analysis.md`
+
+```text
+Review the indicator subsystem in sonarft for correctness and reliability.
+
+### 1. Indicator Implementation Audit
+
+For each indicator (RSI, MACD, Stochastic, SMA, volatility, etc.):
+
+| Indicator | Location | Data Source | Lookback | Correctness | NaN Handling |
+|-----------|----------|-------------|----------|-------------|------------|
+
+Check for each:
+- **Correctness**: Does it implement the standard formula correctly?
+- **Data slicing**: Are candles indexed correctly (no off-by-one)?
+- **Lookback window**: Is there enough data before generating signals?
+- **NaN handling**: What happens with missing or invalid data?
+- **Edge cases**: First candle, insufficient data, zero values?
+
+### 2. OHLCV Data Preprocessing
+
+Examine:
+- **Data loading** (how is OHLCV data loaded?)
+- **Data validation** (are prices/volumes checked for validity?)
+- **Data alignment** (when multiple timeframes used, are they synchronized?)
+- **Missing data** (how are gaps handled?)
+- **Timestamp accuracy** (are candle timestamps correct?)
+
+### 3. Pandas & Pandas-TA Usage
+
+Review:
+- **DataFrame operations** (are they efficient?)
+- **pandas-ta functions** (are they used correctly?)
+- **Custom calculations** (are they correct?)
+- **Performance** (are there repeated calculations that could be cached?)
+
+### 4. Indicator-to-Signal Pipeline
+
+Document the flow:
+- Raw OHLCV data → Preprocessing → Indicators → Signal generation → Trading decision
+
+For each indicator used in trading decisions:
+- **What signal does it generate?**
+- **Threshold values** (what value triggers a trade?)
+- **How is it combined with other indicators?**
+- **What's the risk if it's wrong?**
+
+### 5. off-by-one Errors
+
+Check for common issues:
+- Candle indexing (is index 0 the oldest or newest candle?)
+- Lookback window (is the window size correct?)
+- Shifting operations (pandas.shift usage correct?)
+- Alignment with trade timing (when is signal read vs. when is trade executed?)
+
+### 6. Insufficient Lookback Windows
+
+Identify:
+- **First valid output** (at what candle index does each indicator become valid?)
+- **Minimum data requirement** (for each indicator)
+- **Risk** (could trades execute before indicators are ready?)
+
+### 7. NaN & Invalid Data Handling
+
+Examine:
+- **NaN sources** (where do NaNs come from?)
+- **NaN propagation** (do NaNs spread through calculations?)
+- **NaN handling** (does code check for NaNs before using values?)
+- **Risk** (could NaN values trigger bad trades?)
+
+### 8. Signal Generation Correctness
+
+For each indicator that generates trading signals:
+- **Signal definition** (what value = buy signal, what value = sell?)
+- **Examples** (show calculations with real numbers)
+- **Edge cases** (what happens at extremes?)
+- **False positive risk** (could it generate bad signals?)
+
+### 9. Indicator Analysis Table
+
+Create a comprehensive table:
+
+| Indicator | Function | Lookback | First Valid | NaN Risk | False Positive Risk | Severity |
+|-----------|----------|----------|-------------|----------|-------------------|----------|
+
+### 10. Performance Analysis
 
 Check:
-- correctness of data slicing
-- off-by-one errors
-- insufficient lookback windows
-- unexpected NaN handling
-- indicator alignment with trade decisions
-- performance issues caused by repeated DataFrame work
+- **Repeated calculations** (is same indicator computed multiple times?)
+- **DataFrame overhead** (are copies made unnecessarily?)
+- **Cache opportunities** (what could be cached?)
+- **Computational cost** (how expensive is the indicator pipeline?)
 
-Deliverables:
-- indicator-by-indicator evaluation table
-- explanation of data flow from OHLCV to signal generation
-- risk assessment for bad signal generation
+### 11. Integration Testing Recommendations
 
-Output document:
-`docs/trading/indicator-analysis.md`
+Suggest:
+- Test cases for each indicator
+- Edge case values for testing
+- Signal generation validation approach
+- Performance benchmarks
+
+### 12. Conclusion
+
+Summarize:
+- Indicator reliability assessment
+- Critical issues found
+- Recommendations for improvement
 ```
 
 ---
 
 ## Prompt 6 — Execution & Exchange Integration Review
 
+**Goal**: Verify safe and correct exchange integration and order execution
+
+**Output File**: `docs/trading/execution-analysis.md`
+
 ```text
-Review the exchange integration and order execution path.
+Review the exchange integration and order execution path in sonarft.
 
-Analyze:
-- API abstraction layer
-- WebSocket vs REST fallback behavior
-- fetch order book / market data flow
-- order placement logic
-- simulated order execution
-- partial fill handling
-- error handling and retries
-- cancellation and cleanup behavior
-- exchange-specific assumptions
+### 1. API Abstraction Layer
 
-Check whether the code:
-- correctly separates API access from trading logic
-- handles exchange failures safely
-- avoids duplicate or conflicting orders
-- logs execution outcomes clearly
-- protects against silent execution failures
+Examine:
+- **API Manager class** (what does it do?)
+- **Exchange instances** (how are exchange connections created?)
+- **Library abstraction** (does code abstract away ccxt/ccxtpro differences?)
+- **Method routing** (how are API methods chosen and called?)
+- **Error handling** (how are API errors handled?)
 
-Deliverables:
-- execution flow summary
-- exchange integration matrix
-- failure-mode table
+### 2. Transport Layer Options
 
-Output document:
-`docs/trading/execution-analysis.md`
+Document:
+- **WebSocket usage** (for which operations? Which exchanges?)
+- **REST fallback** (does REST fallback work when WebSocket fails?)
+- **Automatic failover** (is failover automatic or manual?)
+- **Reconnection logic** (how is reconnection handled?)
+- **Message ordering** (are messages processed in order?)
+
+### 3. Market Data Fetching
+
+Review:
+- **Order book fetch** (how is it fetched? How often?)
+- **Ticker data** (how is current price obtained?)
+- **Volume data** (how is volume for indicators obtained?)
+- **Data staleness** (is data age considered?)
+- **API rate limits** (are API limits respected?)
+
+### 4. Order Placement Logic
+
+Examine:
+- **Order parameters** (how is amount, price, side specified?)
+- **Order validation** (pre-flight checks?)
+- **Order placement** (REST vs WebSocket?)
+- **Order confirmation** (how is success verified?)
+- **Failures** (what happens if order placement fails?)
+
+### 5. Simulated Order Execution
+
+For simulation mode, verify:
+- **Simulated fills** (how are orders marked as filled?)
+- **Partial fills** (are partial fills simulated correctly?)
+- **Slippage** (is slippage modeled?)
+- **Order timing** (when are orders marked filled relative to signals?)
+- **Accuracy** (are simulations realistic?)
+
+### 6. Partial Fill Handling
+
+Check:
+- **Partial fill detection** (is code aware of partial fills?)
+- **Position tracking** (is filled amount tracked?)
+- **Remaining amount** (is remainder handled correctly?)
+- **Exit behavior** (does partial fill affect exit logic?)
+
+### 7. Error Handling & Retries
+
+Examine:
+- **Connection errors** (timeout, network down, etc.)
+- **API errors** (rate limit, invalid order, etc.)
+- **Retry logic** (is there exponential backoff? Max retries?)
+- **Silent failures** (could orders execute silently without confirmation?)
+- **Error logging** (are errors logged for debugging?)
+
+### 8. Order Cancellation & Cleanup
+
+Review:
+- **Order cancellation** (how are open orders cancelled?)
+- **Exit cleanup** (are all exit orders placed and confirmed?)
+- **Stale orders** (are old unmatched orders cleaned up?)
+- **Shutdown behavior** (what happens to open orders on shutdown?)
+
+### 9. Exchange-Specific Assumptions
+
+For each supported exchange:
+- **Minimum amounts** (are they enforced?)
+- **Precision rules** (amount and price precision?)
+- **Fee structure** (maker vs taker, understood?)
+- **Limits** (rate limits, concurrent connections?)
+- **Quirks** (any edge behaviors?)
+
+### 10. API Abstraction Matrix
+
+Create a table:
+
+| Operation | Method Name | CCXT | CCXTpro | Error Handling | Tested |
+|-----------|------------|------|---------|----------------|--------|
+
+Operations to table:
+- Fetch order book
+- Fetch ticker
+- Fetch OHLCV
+- Place order
+- Cancel order
+- Fetch balance
+- Fetch order status
+
+### 11. Execution Flow Diagram
+
+Create a Mermaid flowchart:
+- Signal generated → Validation → Order placement → Confirmation → Tracking → Exit
+
+### 12. Failures & Edge Cases Table
+
+| Scenario | Handling | Risk | Severity |
+|----------|----------|------|----------|
+
+Scenarios to cover:
+- Exchange down
+- API rate limit hit
+- Order partially filled
+- Order rejected
+- Network timeout
+- WebSocket disconnect
+- Duplicate order attempted
+- Insufficient balance
+
+### 13. Conclusion
+
+Summarize:
+- Exchange integration safety
+- Critical issues found
+- Production readiness assessment
 ```
 
 ---
 
 ## Prompt 7 — Configuration & Runtime Environment Review
 
+**Goal**: Audit configuration system and runtime environment handling
+
+**Output File**: `docs/configuration/config-review.md`
+
 ```text
-Audit the configuration system and runtime environment handling in SonarFT.
+Audit the configuration system and runtime environment handling in sonarft.
 
-Review:
-- JSON configuration structure
-- config loading behavior
-- defaults and overrides
-- per-bot / per-client configuration separation
-- environment variable usage
-- Docker deployment assumptions
-- file paths and history storage
-- missing config validation
+### 1. Configuration File Structure
 
-Check for:
-- hardcoded trading parameters
-- unsafe fallback behavior
-- invalid file access patterns
-- fragile path handling
-- missing schema validation
+Examine:
+- **Format** (JSON, YAML, Python dict?)
+- **Schema** (is there schema validation?)
+- **Examples** (are example configs provided?)
+- **Documentation** (are parameters documented?)
+- **Defaults** (what are the defaults?)
 
-Deliverables:
-- configuration inventory table
-- runtime assumptions list
-- recommended validation rules
+Create a table of all configuration parameters:
 
-Output document:
-`docs/configuration/config-review.md`
+| Parameter | Required | Type | Default | Purpose | Validation |
+|-----------|----------|------|---------|---------|------------|
+
+### 2. Configuration Loading Behavior
+
+Document:
+- **Entry point** (where is config loaded?)
+- **File location** (where are config files expected?)
+- **Environment overrides** (can environment variables override config?)
+- **Merge behavior** (how are multiple configs merged?)
+- **Fallback behavior** (what happens if config is missing?)
+
+### 3. Per-Bot & Per-Client Configuration
+
+If supported, explain:
+- **Granularity** (what can be configured per-bot vs. globally?)
+- **Inheritance** (do bots inherit from global config?)
+- **Conflicts** (how are conflicts resolved?)
+- **Isolation** (can bots affect each other?)
+
+### 4. Environment Variable Usage
+
+Examine:
+- **Which vars are required** (API keys, secrets?)
+- **Which are optional** (debug flags?)
+- **Defaults** (what if env var is missing?)
+- **Security** (are secrets ever logged?)
+
+### 5. Defaults & Hardcoding Audit
+
+Search for:
+- **Hardcoded values** (grep for string/number literals)
+- **Unsafe defaults** (could dangerous defaults cause problems?)
+- **Missing parameters** (are all needed parameters in config?)
+
+For each hardcoded value found, determine:
+- Should it be configurable?
+- Is the hardcoded value safe?
+
+### 6. Docker Runtime Assumptions
+
+If Docker is used, verify:
+- **Base image** (is it appropriate, up-to-date?)
+- **Working directory** (where does app run from?)
+- **Config location** (where does Docker expect config files?)
+- **Environment setup** (how are API keys passed?)
+- **Volumes** (are volumes used for persistence?)
+- **Entrypoint** (what's the entrypoint command?)
+
+### 7. File Paths & History Storage
+
+Examine:
+- **Relative vs absolute paths** (which are used? Safe?)
+- **Path construction** (are paths built safely without injection?)
+- **Permission requirements** (do paths need special permissions?)
+- **History storage** (where are trade logs/history stored?)
+- **File rotation** (are log files rotated to prevent disk full?)
+
+### 8. Path Safety & Traversal Risks
+
+Check:
+- **User-supplied paths** (can user input control file paths?)
+- **Path traversal** (can .. in paths escape intended directory?)
+- **Symlinks** (are symlinks resolved safely?)
+- **Permissions** (are files created with safe permissions?)
+
+### 9. Configuration Validation
+
+Verify:
+- **Schema validation** (is config structure validated?)
+- **Type checking** (are parameter types checked?)
+- **Range validation** (are min/max checked for numeric params?)
+- **Dependency validation** (if A=X, then B must=Y?)
+- **Error messages** (when validation fails, is error message clear?)
+
+### 10. Configuration Issues Table
+
+| Issue | Location | Type | Severity | Remediation |
+|-------|----------|------|----------|------------|
+
+Issue types:
+- Hardcoded values (should be config)
+- Missing validation
+- Unsafe defaults
+- Security exposure
+- Missing documentation
+
+### 11. Runtime Configuration Summary
+
+Create a table of all runtime configuration:
+
+| Aspect | Current Method | Safe? | Recommendation |
+|--------|----------------|-------|-----------------|
+
+Aspects:
+- API key management
+- Feature flags (simulation mode, etc.)
+- Parameter overrides
+- Performance tuning
+- Logging control
+
+### 12. Docker Configuration Review
+
+If applicable:
+- **Dockerfile analysis** (is it production-ready?)
+- **docker-compose** (if used, is it correct?)
+- **Container security** (running as root? Should be non-root)
+- **Secrets handling** (how are secrets passed? Safely?)
+
+### 13. Conclusion
+
+Assess:
+- Configuration system maturity
+- Safety of defaults
+- Readiness for production
+- Recommendations for hardening
 ```
 
 ---
 
 ## Prompt 8 — Security & Trading Risk Review
 
+**Goal**: Identify security vulnerabilities and operational trading risks
+
+**Output File**: `docs/security/security-audit.md`
+
 ```text
-Perform a security and operational risk review of SonarFT.
+Perform a comprehensive security and operational risk review of sonarft.
 
-Analyze:
-- secret handling
-- API key exposure risks
-- unsafe logging of sensitive data
-- input validation
-- file path safety
-- WebSocket exposure
-- denial-of-service risks
-- trade safety controls
-- maximum loss or runaway trading risks
-- liquidity failure behavior
+### 1. Secret & Credential Handling
 
-For each risk, specify:
-- severity
-- attack or failure scenario
-- evidence in code
-- mitigation recommendation
+Examine:
+- **API keys** (how are they stored? Loaded?)
+- **Secret keys** (database passwords, etc.?)
+- **Logging** (are secrets ever logged? Grep for "key", "secret", "password" in logs)
+- **Environment variables** (how are they managed?)
+- **Secrets in config** (are secrets in config files? Should not be)
+- **.gitignore compliance** (are secrets excluded from version control?)
 
-Deliverables:
-- security risk table
-- operational risk table
-- critical findings section
+Issues to identify:
+- Secrets in source code or config files
+- Secrets in logs or error messages
+- Hardcoded credentials
+- Unencrypted credential storage
 
-Output document:
-`docs/security/security-audit.md`
+### 2. Input Validation & Injection Risks
+
+Check:
+- **User input** (what input does the system accept?)
+- **Command injection** (can user input execute commands?)
+- **File path injection** (can user input manipulate file paths?)
+- **JSON/SQL injection** (if database used, check SQL safety)
+- **API input** (validation of API requests?)
+
+### 3. File Path Safety
+
+Examine:
+- **Path construction** (are paths built safely?)
+- **Path traversal** (can ../ escape intended directory?)
+- **Symlinks** (are symlinks resolved safely?)
+- **File permissions** (are files created with correct permissions?)
+
+### 4. WebSocket Security
+
+If WebSocket is used:
+- **Authentication** (is WebSocket connection authenticated?)
+- **Authorization** (does each connection have proper permissions?)
+- **Message validation** (are received messages validated?)
+- **DoS risk** (could message flood crash the system?)
+- **JSON parsing** (is JSON parsing safe against large documents?)
+
+### 5. API Exposure Risks
+
+Examine:
+- **API endpoints** (what does each endpoint do?)
+- **Authentication** (is each endpoint authenticated?)
+- **Rate limiting** (are rate limits enforced?)
+- **Input validation** (what validates request parameters?)
+- **Error messages** (do errors leak system information?)
+
+### 6. Denial of Service (DoS) Risks
+
+Identify:
+- **Unbounded loops** (could a request cause infinite loops?)
+- **Memory allocation** (could large requests cause memory exhaust?)
+- **Computation** (could expensive computation block services?)
+- **Connections** (could many connections crash the system?)
+- **Queues** (could messages accumulate unbounded?)
+
+### 7. Trading Safety Controls
+
+Verify:
+- **Simulation mode gate** (is it enforced? Can't trade live in simulation?)
+- **Maximum position size** (is there a max?)
+- **Maximum loss limit** (can losses be limited?)
+- **Rate limiting** (how many orders per second/minute?)
+- **Circuit breaker** (does system halt on errors?)
+- **Manual stops** (can a human stop trading?)
+
+### 8. Financial Risk Management
+
+Check:
+- **Collateral checks** (is balance checked before trading?)
+- **Margin requirements** (if margin used, checked?)
+- **Slippage protection** (max acceptable slippage enforced?)
+- **Runaway trading** (what prevents infinite loss?)
+- **Liquidity risk** (could large orders fail to fill?)
+
+### 9. Logging & Monitoring
+
+Examine:
+- **What's logged** (trades, errors, connections?)
+- **Log sensitivity** (are sensitive values logged? They shouldn't be)
+- **Log storage** (where are logs stored? How long kept?)
+- **Log rotation** (are logs rotated to prevent disk full?)
+- **Monitoring** (is there alerting for errors/anomalies?)
+
+### 10. Dependency Security
+
+Check:
+- **Dependency versions** (are versions pinned or open?)
+- **Outdated deps** (any known vulnerabilities in dependencies?)
+- **Supply chain** (are packages from trusted sources?)
+
+### 11. Security Risk Table
+
+| Risk Category | Specific Risk | Location | Severity | Likelihood | Mitigation |
+|---------------|---------------|----------|----------|------------|-----------|
+
+Risk categories:
+- Secrets exposure
+- Injection attacks
+- DoS vulnerability
+- Trading safety
+- Financial risk
+- Dependency risk
+
+### 12. Operational Risk Table
+
+| Risk | Scenario | Impact | Preventing Control |
+|------|----------|--------|-------------------|
+
+Scenarios:
+- API key compromise
+- Runaway trading
+- Exchange connection loss
+- Incorrect configuration
+- Accidental real trading in simulation
+
+### 13. Severity Assessment
+
+For each finding:
+- **Severity level** (Low / Medium / High / Critical)
+- **Attack/failure scenario**
+- **Proof-of-concept** (if possible, show how it could happen)
+- **Financial impact**
+- **Remediation steps**
+
+### 14. Conclusion
+
+Summarize:
+- Critical security findings (if any)
+- Critical trading safety findings
+- Recommendations for hardening
+- Production readiness assessment
 ```
 
 ---
 
 ## Prompt 9 — Performance & Scalability Review
 
+**Goal**: Identify performance bottlenecks and scalability issues
+
+**Output File**: `docs/performance/performance-analysis.md`
+
 ```text
-Review SonarFT for performance, scalability, and resource usage.
+Review sonarft for performance, scalability, and resource usage.
 
-Analyze:
-- API call frequency
-- repeated order book fetching
-- unnecessary sequential work
-- DataFrame overhead
-- memory growth in logs or task lists
-- cache opportunities
-- concurrency scaling across bots and symbols
-- bottlenecks in indicator or pricing workflows
+### 1. API Call Frequency Audit
 
-Deliverables:
-- performance bottleneck list
-- optimization opportunities table
-- scalability assessment
-- prioritization by impact
+Document:
+- **How often is each exchange API called?**
+- **Rate limiting** (are API rate limits respected?)
+- **Unnecessary calls** (are there redundant or duplicate calls?)
+- **Batching opportunities** (could calls be batched?)
 
-Output document:
-`docs/performance/performance-analysis.md`
+Create a table:
+
+| API Call | Purpose | Frequency | Rate Limit | Optimization Potential |
+|----------|---------|-----------|------------|----------------------|
+
+### 2. Order Book Fetching Analysis
+
+Examine:
+- **Frequency** (how often is order book fetched?)
+- **Necessity** (is it fetched more than needed?)
+- **Caching** (is data cached? For how long?)
+- **Staleness** (max acceptable age of order book data?)
+- **Cost** (API cost per fetch in rate limits?)
+
+### 3. Data Processing Performance
+
+Check:
+- **DataFrame operations** (are they efficient?)
+- **Repeated calculations** (is same calculation done multiple times?)
+- **Memory copies** (are unnecessary copies made?)
+- **Pandas efficiency** (are vectorized operations used?)
+- **Custom loops** (are there inefficient loops that could be vectorized?)
+
+### 4. Indicator Calculation Performance
+
+For the indicator pipeline:
+- **Computational cost** (how expensive is indicator computation?)
+- **Frequency** (how often are indicators recalculated?)
+- **Caching** (are results cached?)
+- **Optimization** (could it be done more efficiently?)
+
+### 5. Memory Usage Analysis
+
+Examine:
+- **Task lists** (do task lists grow unbounded?)
+- **Logs** (are logs kept in memory? Could grow unbounded?)
+- **Order history** (is history stored in memory or on disk?)
+- **DataFrame size** (how large are DataFrames in memory?)
+- **Memory growth** (over time, does memory usage grow?)
+
+### 6. Bottleneck Identification
+
+Identify:
+- **Critical path** (what's the slowest operation in the trading decision pipeline?)
+- **Sequential operations** (what could be parallelized?)
+- **I/O blocking** (are there blocking I/O operations in async code?)
+
+Create a bottleneck table:
+
+| Bottleneck | Location | Frequency | Impact | Potential Improvement |
+|-----------|----------|-----------|--------|---------------------|
+
+### 7. Concurrency & Scaling
+
+Examine:
+- **Multi-bot scaling** (can multiple bots run concurrently? How many?)
+- **Multi-symbol scaling** (can system scale to many symbols?)
+- **CPU scaling** (will adding CPUs help?)
+- **I/O bound** (is system I/O bound or CPU bound?)
+- **Scalability limits** (what limits scaling?)
+
+### 8. Cache & Optimization Opportunities
+
+Identify:
+- **Data that could be cached** (order books, indicator values?)
+- **Computation that could be cached** (repeated calculations?)
+- **Batch opportunities** (operations that could be batched?)
+- **Algorithm improvements** (better algorithms available?)
+
+### 9. Latency Analysis
+
+For each critical operation:
+- **Current latency** (if measurable)
+- **Acceptable latency** (what's fast enough?)
+- **Latency sources** (where does time go?)
+- **Improvement potential** (how much faster could it be?)
+
+### 10. Resource Usage Summary
+
+Document:
+
+| Resource | Current Usage | Peak Usage | Limit | Headroom |
+|----------|---------------|-----------|-------|----------|
+
+Resources:
+- CPU (% utilization)
+- Memory (MB used)
+- Disk (MB/hour for logs)
+- Network (API calls/second)
+
+### 11. Load Testing Recommendations
+
+Suggest:
+- Test scenarios (single bot, 10 bots, 100 symbols?)
+- Metrics to measure (latency, memory, API calls?)
+- Tools to use (profiler, load generator?)
+- Acceptable thresholds (what's good enough?)
+
+### 12. Performance Optimization Roadmap
+
+Create a prioritized list:
+
+| Optimization | Effort | Impact | Priority |
+|-------------|--------|--------|----------|
+
+### 13. Conclusion
+
+Summarize:
+- Current performance assessment
+- Critical bottlenecks
+- Recommendations for optimization
 ```
 
 ---
 
 ## Prompt 10 — Code Quality, Testing & Refactoring Review
 
+**Goal**: Assess code quality, test coverage, and refactoring needs
+
+**Output Files**:
+- `docs/code-quality/code-quality.md`
+- `docs/code-quality/testing-strategy.md`
+- `docs/code-quality/refactoring-roadmap.md`
+
 ```text
-Review SonarFT for code quality, maintainability, and test readiness.
+Review sonarft for code quality, maintainability, and test readiness.
 
-Assess:
-- naming consistency
-- module docstrings
-- type annotations
-- function and class size
-- duplication
-- logging consistency
-- error handling consistency
-- testability of each module
-- coverage gaps
-- refactoring opportunities
+### 1. Naming Consistency Audit
 
-Deliverables:
-- code quality scorecard
-- testing gaps table
-- refactoring roadmap
-- prioritized action list
+Check:
+- **Variable names** (are they descriptive and consistent?)
+- **Function names** (do they clearly describe what they do?)
+- **Class names** (are they clear and follow conventions?)
+- **Constant names** (are they in UPPER_CASE as convention?)
+- **Abbreviations** (are abbreviations clear or confusing?)
 
-Output documents:
-`docs/code-quality/code-quality.md`
-`docs/code-quality/testing-strategy.md`
-`docs/code-quality/refactoring-roadmap.md`
+Find and document:
+- Poor names that hurt readability
+- Inconsistent naming patterns
+
+### 2. Module Documentation
+
+Examine:
+- **Module docstrings** (does each module have a docstring?)
+- **Class docstrings** (are classes documented?)
+- **Function docstrings** (are function purposes clear?)
+- **Type hints** (are parameter types documented or annotated?)
+- **Docstring quality** (are they complete and accurate?)
+
+Create a table:
+
+| Module | Has Docstring | Class Docs | Function Docs | Quality |
+|--------|---------------|-----------|---------------|---------|
+
+### 3. Type Annotations
+
+Check:
+- **Parameter types** (are parameters type-hinted?)
+- **Return types** (are return types hinted?)
+- **Variable types** (in complex code, are types unclear without hints?)
+- **Type coverage** (what % of code has type hints?)
+- **Consistency** (is type hinting used consistently?)
+
+### 4. Code Size & Complexity
+
+Identify:
+- **Large files** (files > 500 lines? Should they be broken up?)
+- **Large functions** (functions > 50 lines? Candidates for refactoring?)
+- **Cyclomatic complexity** (deeply nested code, many branches?)
+- **Parameter count** (functions with many parameters? Hard to use)
+
+Table of concerns:
+
+| File/Function | Lines | Complexity | Issue |
+|---------------|-------|-----------|-------|
+
+### 5. Duplication Audit
+
+Search for:
+- **Copy-pasted code** (two similar functions that should be one?)
+- **Similar logic** (same pattern repeated in different places?)
+- **Refactoring candidates** (functions that could be extracted?)
+
+### 6. Error Handling Consistency
+
+Examine:
+- **Exception types** (are specific exceptions caught or broad Exception?)
+- **Error recovery** (does code recover from errors or crash?)
+- **Logging** (are errors logged for debugging?)
+- **User messages** (are error messages clear and helpful?)
+
+### 7. Testing Gaps Analysis
+
+Document:
+- **Existing tests** (what's tested? What's not?)
+- **Test coverage** (can you measure code coverage?)
+- **Test quality** (are tests thorough or superficial?)
+- **Edge cases** (are edge cases tested?)
+
+Identify high-risk code that's untested:
+- Financial calculations (MUST be tested)
+- Error handling (MUST be tested)
+- Async operations (MUST be tested)
+- Exchange integration (MUST be tested)
+
+### 8. Test-Friendly Code Assessment
+
+Check if code is testable:
+- **Dependency injection** (can dependencies be mocked?)
+- **Global state** (does code use globals that complicate testing?)
+- **External dependencies** (can API calls be mocked?)
+- **Determinism** (is behavior deterministic or does it depend on time/randomness?)
+
+### 9. Logging Consistency
+
+Examine:
+- **Logging levels** (are INFO/DEBUG/ERROR used appropriately?)
+- **Log messages** (are they descriptive?)
+- **Debug logging** (can behavior be debugged from logs?)
+- **Production logs** (too verbose? Will logs grow unbounded?)
+
+### 10. Code Quality Scorecard
+
+Create a summary:
+
+| Aspect | Score (1-10) | Assessment |
+|--------|-------------|-----------|
+
+Aspects:
+- Readability
+- Documentation
+- Type safety
+- Error handling
+- Testability
+- Performance consideration
+- Security awareness
+- Adherence to standards
+
+### 11. Refactoring Roadmap
+
+Prioritize refactoring by impact:
+
+| Refactoring | Complexity | Impact | Priority |
+|-------------|-----------|--------|----------|
+
+Examples:
+- Extract large function into smaller functions
+- Create base class for similar classes
+- Consolidate duplicate code
+- Improve error handling in specific modules
+- Add type hints
+- Improve documentation
+
+### 12. Testing Strategy Recommendations
+
+Propose:
+- Unit test targets (which modules must have unit tests?)
+- Integration test scenarios (what should be integration tested?)
+- Simulation tests (trade logic validation?)
+- Property-based tests (for financial calculations?)
+- Test infrastructure improvements
+
+### 13. Conclusion
+
+Summarize:
+- Overall code quality assessment
+- Top refactoring priorities
+- Testing gaps and recommendations
+- Estimated effort for quality improvements
 ```
 
 ---
 
 ## Final Consolidation Prompt
 
+**Goal**: Synthesize all reviews into executive summary and final assessment
+
+**Output File**: `docs/review/final-audit-report.md`
+
+After completing all 10 review prompts above, run this prompt:
+
 ```text
-After completing all review sections, produce a final consolidated audit.
+You have completed comprehensive reviews of the sonarft codebase across 10 different domains.
 
-The final report must:
-- summarize the most important findings from all documents
-- rank issues by severity and financial risk
-- identify cross-cutting architectural problems
-- call out the highest-priority fixes
-- provide a production-readiness judgment
-- include a concise executive summary
+Your job now is to produce a **final consolidated audit report** that synthesizes findings from all reviews.
 
-The final document must also include:
-- a top-10 remediation list
-- a risk heatmap table
-- a readiness score from 0 to 10
-- a recommendation: Not Ready / Prototype / Beta / Production-Ready
+### Key Sections to Include:
 
-Output document:
-`docs/review/final-audit-report.md`
+1. **Executive Summary** (1 page)
+   - Overall readiness judgment
+   - Top 3 critical findings
+   - Highest-priority fixes
+   - Financial and security risk assessment
+   - Recommendation: Not Ready / Prototype / Beta / Production-Ready
+
+2. **Findings Synthesis**
+   - Cross-cutting architectural problems
+   - Systematic issues repeated in multiple modules
+   - Quality patterns and concerns
+   - Highest-severity risks
+
+3. **Risk Ranking (Top 20)**
+   - All issues ranked by severity and impact
+   - Financial impact assessment
+   - Recommendation for each
+
+4. **Risk Heatmap**
+   - Risk concentration by domain
+   - Overall risk level by category
+
+5. **Readiness Scorecard**
+   - Assessment of each domain (0-10%)
+   - Production readiness score (0-10)
+
+6. **Top 20 Action Items**
+   - Prioritized fixes with effort estimates
+
+7. **Go/No-Go Framework**
+   - Criteria for each stage (Simulation → Paper → Real → Production)
+
+8. **Timeline Estimate**
+   - Effort to achieve production readiness
+
+9. **Recommendations**
+   - Next immediate steps
+
+10. **Conclusion**
 ```
 
 ---
 
-## Required Output Format for Every Document
+## Roadmap Generation Prompt — Fixes & Improvements Implementation Plan
 
-```text
-Each generated Markdown document must use this structure:
+**Goal**: Transform review findings into actionable engineering roadmap
 
-# Title
+Run this **only after all 10 review prompts and Final Audit are complete**.
 
-## Executive Summary
+**Output File**: `docs/roadmap/implementation-roadmap.md`
 
-## Scope
-
-## Findings
-
-## Severity Assessment
-
-## Recommendations
-
-## Supporting Tables
-
-## Diagrams
-
-## Conclusion
-```
+[See original document for complete detailed prompt structure covering:]
+- Issue-to-Task Conversion Matrix
+- Phase-Based Implementation Plan (Phases 0-5)
+- Dependency Graph
+- Risk Reduction Mapping
+- Effort & Timeline Estimation
+- Technical Debt Backlog
+- Testing & Validation Roadmap
+- Release Strategy Milestones
+- Success Metrics & Monitoring
+- Developer Onboarding Plan
 
 ---
 
-## Document Set
+## Setup, Execution & Operational Modes Guide Prompt
 
-```text
+**Goal**: Provide complete operational and deployment guidance
+
+Run **after architecture and configuration reviews**.
+
+**Output File**: `docs/operations/setup-and-execution-guide.md`
+
+[See original document for complete detailed prompt structure covering:]
+- System Overview
+- Prerequisites & Requirements
+- Installation Guide
+- Configuration Guide
+- Execution Guide
+- Operational Modes (Simulation, Paper, Real Trading)
+- Safe Deployment Workflow
+- Logging & Monitoring
+- Troubleshooting
+- Testing Workflow
+- Performance & Scaling
+- Security Best Practices
+- Backup & Recovery
+- Upgrade & Maintenance
+- Real Trading Readiness Checklist
+
+---
+
+## Best Practices for All Prompts
+
+### Core Principles
+
+1. **Never Guess** — If information cannot be found in code, write: "⚠️ Not Found in Source Code"
+
+2. **Always Cite** — Reference specific files, functions, classes, and line numbers
+
+3. **Use Tables** — Tables are better than prose for comparisons and structured data
+
+4. **Include Diagrams** — Use Mermaid for architecture, flows, and relationships
+
+5. **Be Actionable** — Don't just identify problems; include concrete fixes
+
+6. **Consistent Severity** — Apply consistent levels: Low / Medium / High / Critical
+
+7. **Financial Focus** — For a trading system, financial correctness is paramount
+
+8. **Clear Assumptions** — Distinguish confirmed findings from assumptions
+
+9. **Production Lens** — Always assess production readiness impact
+
+10. **Maintain Consistency** — Use same terminology and risk ratings across all documents
+
+---
+
+## Document Organization
+
+All generated documents will be organized in this structure:
+
+```
 docs/
-├── architecture/
-│   ├── overview.md
-│   └── async-concurrency.md
-├── trading/
-│   ├── trading-engine-analysis.md
-│   ├── financial-math-review.md
-│   ├── indicator-analysis.md
-│   └── execution-analysis.md
-├── configuration/
-│   └── config-review.md
-├── security/
-│   └── security-audit.md
-├── performance/
-│   └── performance-analysis.md
-├── code-quality/
-│   ├── code-quality.md
-│   ├── testing-strategy.md
-│   └── refactoring-roadmap.md
-└── review/
-    └── final-audit-report.md
+├── architecture/          (Prompts 1-2)
+├── trading/              (Prompts 3-6)
+├── configuration/        (Prompt 7)
+├── security/             (Prompt 8)
+├── performance/          (Prompt 9)
+├── code-quality/         (Prompt 10)
+├── review/               (Final Audit)
+├── roadmap/             (Implementation Roadmap)
+└── operations/          (Setup & Operations)
 ```
 
 ---
 
-## Usage Note
+## Quick Reference: Which Prompt to Use
 
-Run the prompts in order for a full audit. Use any single prompt independently for targeted review.
-
-For the most useful results, ask the AI to:
-- reference file names and function names
-- quote exact logic only when necessary and within copyright-safe limits
-- avoid vague claims
-- produce Markdown that can be saved directly as documentation
-
----
-
-# Roadmap Generation Prompt — Fixes & Improvements Implementation Plan
-
-Use this prompt **after all review documents have been generated**. This prompt creates a structured execution roadmap to fix issues and implement improvements identified during the audit.
-
-## Master Roadmap Prompt
-
-```text
-You are a senior technical program manager, software architect, and quantitative trading system reviewer.
-
-Your job is to generate a **comprehensive technical roadmap** based on previously generated review documents.
-
-Inputs:
-- All review documents under docs/
-- All findings, risks, and recommendations
-- All severity classifications
-- All performance, security, and trading safety issues
-
-Your objective is to transform findings into an **actionable engineering roadmap** that can be executed by developers.
-
-Important rules:
-- Convert problems into implementation tasks
-- Group related fixes into logical phases
-- Order tasks by risk reduction priority
-- Include dependencies between tasks
-- Provide realistic execution sequencing
-- Clearly separate mandatory fixes from optional improvements
-- Focus strongly on trading safety and financial correctness
-
-Never invent issues that were not identified.
-If something lacks enough detail, write:
-"⚠️ Requires Engineering Clarification"
-```
+| Need | Use This Prompt |
+|------|-----------------|
+| Quick 30-min health check | Prompt 10 (Code Quality) |
+| Understand overall architecture | Prompt 1 (Architecture) |
+| Verify trading safety | Prompts 3 + 4 (Trading + Math) |
+| Check security | Prompt 8 (Security) |
+| Production readiness | All prompts + Final Audit |
+| Implementation plan | Roadmap prompt |
+| Operations/Deployment | Setup & Operations guide |
+| Full deep audit | Prompts 1-10 + Final Audit + Roadmap |
 
 ---
 
-## Roadmap Construction Requirements
-
-Generate the roadmap using the following structure.
-
-### 1. Executive Roadmap Summary
-
-Provide:
-- Overall system readiness status
-- Estimated total effort level (Small / Medium / Large / Enterprise)
-- Estimated number of implementation phases
-- Primary risk domains (e.g., async safety, trading logic, security)
-- Top architectural priorities
-
----
-
-### 2. Issue-to-Task Conversion Matrix
-
-Convert each issue into an actionable development task.
-
-For each issue include:
-
-| Field | Description |
-|------|-------------|
-| Issue ID | Unique identifier |
-| Source Document | File where issue originated |
-| Affected Files | File names |
-| Severity | Low / Medium / High / Critical |
-| Task Description | Concrete engineering work |
-| Risk Category | Trading / Async / Security / Performance / Architecture |
-| Fix Complexity | Low / Medium / High |
-| Estimated Effort | Hours or Days |
-| Dependencies | Other tasks required first |
-| Validation Method | How correctness will be verified |
-
----
-
-### 3. Phase-Based Implementation Plan
-
-Group tasks into **phases** based on priority and dependencies.
-
-Required phase categories:
-
-Phase 0 — Critical Safety Fixes
-Focus on:
-- trading correctness
-- financial math safety
-- execution safety
-- fatal runtime risks
-
-Phase 1 — Stability & Reliability
-Focus on:
-- async correctness
-- error handling
-- concurrency stability
-- data validation
-
-Phase 2 — Security Hardening
-Focus on:
-- secret protection
-- configuration safety
-- API reliability
-
-Phase 3 — Performance Optimization
-Focus on:
-- latency
-- memory usage
-- concurrency scaling
-
-Phase 4 — Architecture Improvements
-Focus on:
-- modularization
-- separation of concerns
-- dependency cleanup
-
-Phase 5 — Feature & Strategy Enhancements
-Focus on:
-- indicator optimization
-- new trading logic improvements
-
-For each phase include:
-
-- Phase Objective
-- Tasks Included
-- Risk Reduction Impact
-- Expected Stability Gains
-- Exit Criteria
-
----
-
-### 4. Dependency Graph
-
-Create a dependency relationship summary between tasks.
-
-Include:
-- Task prerequisites
-- Blocking relationships
-- Parallelizable tasks
-
-Use a Mermaid diagram when helpful.
-
----
-
-### 5. Risk Reduction Mapping
-
-Map each phase to risk reduction outcomes.
-
-Include:
-
-| Phase | Risk Before | Risk After | Impact Level |
-|------|-------------|-------------|--------------|
-
-Focus especially on:
-- financial loss risks
-- incorrect trading decisions
-- concurrency failure risks
-
----
-
-### 6. Effort & Timeline Estimation
-
-Estimate development effort.
-
-Include:
-
-| Phase | Effort (Days) | Team Size | Duration Estimate |
-|------|----------------|------------|-------------------|
-
-Provide:
-- conservative estimate
-- aggressive estimate
-- recommended team size
-
----
-
-### 7. Technical Debt Backlog
-
-Create a backlog of lower-priority improvements.
-
-Include:
-
-- refactoring tasks
-- documentation gaps
-- test improvements
-- logging improvements
-
-Each item must include:
-- priority score
-- implementation benefit
-- recommended timeline window
-
----
-
-### 8. Testing & Validation Roadmap
-
-Define how each phase will be validated.
-
-Include:
-
-- unit test targets
-- integration test targets
-- simulation tests
-- regression tests
-- load tests
-
-Include specific validation strategies for:
-
-- trading logic correctness
-- async task safety
-- financial calculations
-- exchange execution behavior
-
----
-
-### 9. Release Strategy Plan
-
-Define staged release readiness milestones.
-
-Required milestones:
-
-Milestone A — Safe Simulation Mode
-Milestone B — Controlled Paper Trading
-Milestone C — Limited Real Trading
-Milestone D — Production Deployment
-
-For each milestone include:
-
-- readiness requirements
-- blocking issues
-- validation criteria
-- rollback strategy
-
----
-
-### 10. Success Metrics Definition
-
-Define measurable system-quality metrics.
-
-Examples:
-
-- trade success accuracy
-- execution latency
-- error rate
-- memory growth rate
-- recovery success rate
-- profitability signal correctness
-
-Each metric must include:
-
-- measurement method
-- acceptable thresholds
-- monitoring frequency
-
----
-
-## Final Roadmap Output Document
-
-The roadmap must be saved as:
-
-`docs/roadmap/implementation-roadmap.md`
-
----
-
-## Required Roadmap Output Format
-
-```text
-# Implementation Roadmap — SonarFT
-
-## Executive Summary
-
-## Issue Conversion Matrix
-
-## Phase-Based Implementation Plan
-
-## Dependency Graph
-
-## Risk Reduction Mapping
-
-## Effort & Timeline Estimation
-
-## Technical Debt Backlog
-
-## Testing & Validation Strategy
-
-## Release Strategy
-
-## Success Metrics
-
-## Final Implementation Priorities
-
-## Conclusion
-```
-
----
-
-## Optional Advanced Roadmap Extension (Recommended)
-
-If sufficient data exists, also generate:
-
-- Gantt-style execution timeline
-- Sprint-ready task breakdown
-- Risk heatmap visualization
-- Developer role assignment suggestions
-- CI/CD pipeline upgrade recommendations
-
-Output optional extensions to:
-
-`docs/roadmap/advanced-execution-plan.md`
-
----
-
-## Usage Recommendation
-
-Run this roadmap prompt **only after all review documents are completed**.
-
-This ensures:
-- all issues are accounted for
-- priorities are correct
-- roadmap sequencing is accurate
-- engineering effort is realistic
+## Version Notes
+
+**v2.0 (Current)**
+- Improved structure and navigation
+- Better quick-start guide
+- Clearer table of contents
+- More practical guidance on usage
+- Better separation of concerns
+- Output file locations clearly marked
 

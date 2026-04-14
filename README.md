@@ -179,7 +179,7 @@ WebSocket connections are handled at `/ws/{client_id}`. Supported WebSocket acti
 Build and run with Docker Compose (includes Traefik reverse proxy with TLS):
 
 ```shell
-~/sonarft$ docker build -t sonarftbot:latest .
+~/sonarft$ docker build -t sonarft:latest .
 ~/sonarft$ docker-compose up
 ```
 
