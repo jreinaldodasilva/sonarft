@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# SonarFT — runtime secrets and generated data
+acme.json
+sonarftdata/history/
+sonarftdata/bots/
+sonarftdata/config/

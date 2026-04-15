@@ -31,42 +31,49 @@ class SonarftPrices:
         d_period = 3
         order_book_depth = 6
 
-        # --- fetch all indicators in parallel ---
-        (
-            market_movement_buy,
-            market_movement_sell,
-            market_direction_buy,
-            market_direction_sell,
-            market_rsi_buy,
-            market_rsi_sell,
-            stoch_buy,
-            stoch_sell,
-            market_trend_buy,
-            market_trend_sell,
-            volatility_buy_raw,
-            volatility_sell_raw,
-            order_book_buy,
-            order_book_sell,
-            support_price,
-            resistance_price,
-        ) = await asyncio.gather(
-            self.sonarft_indicators.market_movement(buy_exchange, base, quote, order_book_depth),
-            self.sonarft_indicators.market_movement(sell_exchange, base, quote, order_book_depth),
-            self.sonarft_indicators.get_market_direction(buy_exchange, base, quote, 'sma', period),
-            self.sonarft_indicators.get_market_direction(sell_exchange, base, quote, 'sma', period),
-            self.sonarft_indicators.get_rsi(buy_exchange, base, quote, rsi_period),
-            self.sonarft_indicators.get_rsi(sell_exchange, base, quote, rsi_period),
-            self.sonarft_indicators.get_stoch_rsi(buy_exchange, base, quote, rsi_period, stoch_period, k_period, d_period),
-            self.sonarft_indicators.get_stoch_rsi(sell_exchange, base, quote, rsi_period, stoch_period, k_period, d_period),
-            self.sonarft_indicators.get_short_term_market_trend(buy_exchange, base, quote, '1m', 6, 0.001),
-            self.sonarft_indicators.get_short_term_market_trend(sell_exchange, base, quote, '1m', 6, 0.001),
-            self.sonarft_indicators.get_volatility(buy_exchange, base, quote),
-            self.sonarft_indicators.get_volatility(sell_exchange, base, quote),
-            self.sonarft_indicators.get_order_book(buy_exchange, base, quote),
-            self.sonarft_indicators.get_order_book(sell_exchange, base, quote),
-            self.sonarft_indicators.get_support_price(sell_exchange, base, quote, 3),
-            self.sonarft_indicators.get_resistance_price(buy_exchange, base, quote, 3),
-        )
+        # --- fetch all indicators in parallel (30s timeout) ---
+        try:
+            (
+                market_movement_buy,
+                market_movement_sell,
+                market_direction_buy,
+                market_direction_sell,
+                market_rsi_buy,
+                market_rsi_sell,
+                stoch_buy,
+                stoch_sell,
+                market_trend_buy,
+                market_trend_sell,
+                volatility_buy_raw,
+                volatility_sell_raw,
+                order_book_buy,
+                order_book_sell,
+                support_price,
+                resistance_price,
+            ) = await asyncio.wait_for(
+                asyncio.gather(
+                    self.sonarft_indicators.market_movement(buy_exchange, base, quote, order_book_depth),
+                    self.sonarft_indicators.market_movement(sell_exchange, base, quote, order_book_depth),
+                    self.sonarft_indicators.get_market_direction(buy_exchange, base, quote, 'sma', period),
+                    self.sonarft_indicators.get_market_direction(sell_exchange, base, quote, 'sma', period),
+                    self.sonarft_indicators.get_rsi(buy_exchange, base, quote, rsi_period),
+                    self.sonarft_indicators.get_rsi(sell_exchange, base, quote, rsi_period),
+                    self.sonarft_indicators.get_stoch_rsi(buy_exchange, base, quote, rsi_period, stoch_period, k_period, d_period),
+                    self.sonarft_indicators.get_stoch_rsi(sell_exchange, base, quote, rsi_period, stoch_period, k_period, d_period),
+                    self.sonarft_indicators.get_short_term_market_trend(buy_exchange, base, quote, '1m', 6, 0.001),
+                    self.sonarft_indicators.get_short_term_market_trend(sell_exchange, base, quote, '1m', 6, 0.001),
+                    self.sonarft_indicators.get_volatility(buy_exchange, base, quote),
+                    self.sonarft_indicators.get_volatility(sell_exchange, base, quote),
+                    self.sonarft_indicators.get_order_book(buy_exchange, base, quote),
+                    self.sonarft_indicators.get_order_book(sell_exchange, base, quote),
+                    self.sonarft_indicators.get_support_price(sell_exchange, base, quote, 3),
+                    self.sonarft_indicators.get_resistance_price(buy_exchange, base, quote, 3),
+                ),
+                timeout=30.0,
+            )
+        except asyncio.TimeoutError:
+            self.logger.warning(f"weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
+            return 0, 0, {}
 
         # guard None indicators
         if stoch_buy is None or stoch_sell is None:

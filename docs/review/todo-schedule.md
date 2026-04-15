@@ -24,23 +24,23 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 
 | # | Task | File(s) | Effort | Status |
 |---|---|---|---|---|
-| 1.1 | Add `acme.json` + `sonarftdata/` subdirs to `.gitignore` | `.gitignore` | 5 min | ⬜ |
-| 1.2 | Fix server bind address `127.0.0.1` → `0.0.0.0` | `sonarft.py` | 5 min | ⬜ |
+| 1.1 | Add `acme.json` + `sonarftdata/` subdirs to `.gitignore` | `.gitignore` | 5 min | ✅ |
+| 1.2 | Fix server bind address `127.0.0.1` → `0.0.0.0` | `sonarft.py` | 5 min | ✅ |
 | 1.3 | Fix `order_placed` None check in `execute_order` | `sonarft_execution.py` | 15 min | ✅ |
 | 1.4 | Fix `get_last_price` None check in `monitor_price` | `sonarft_execution.py` | 15 min | ✅ |
 | 1.5 | Fix `np.mean/std` on empty list → NaN thresholds | `sonarft_validators.py` | 30 min | ✅ |
 | 1.6 | Fix `bid_prices[0]` IndexError on empty order book | `sonarft_validators.py` | 15 min | ✅ |
 | 1.7 | Fix `get_short_term_market_trend` NameError on zero prices | `sonarft_indicators.py` | 15 min | ✅ |
-| 1.8 | Add same-exchange arbitrage guard | `sonarft_search.py` | 30 min | ⬜ |
-| 1.9 | Wire `record_trade_result()` into trade completion | `sonarft_search.py` | 1 hour | ⬜ |
-| 1.10 | Remove double rate limiting | `sonarft_api_manager.py` | 30 min | ⬜ |
-| 1.11 | Add order book cache (2s TTL) | `sonarft_api_manager.py` | 1 hour | ⬜ |
+| 1.8 | Add same-exchange arbitrage guard | `sonarft_search.py` | 30 min | ✅ |
+| 1.9 | Wire `record_trade_result()` into trade completion | `sonarft_search.py` | 1 hour | ✅ |
+| 1.10 | Remove double rate limiting | `sonarft_api_manager.py` | 30 min | ✅ |
+| 1.11 | Add order book cache (2s TTL) | `sonarft_api_manager.py` | 1 hour | ✅ |
 | 1.12 | Fix `previous_spread` race condition (per-call local var) | `sonarft_indicators.py` | 30 min | ✅ |
 | 1.13 | Fix `self.volatility` race condition (return value, not state) | `sonarft_validators.py` | 30 min | ✅ |
-| 1.14 | Add `asyncio.wait_for` timeout to `weighted_adjust_prices` gather | `sonarft_prices.py` | 30 min | ⬜ |
+| 1.14 | Add `asyncio.wait_for` timeout to `weighted_adjust_prices` gather | `sonarft_prices.py` | 30 min | ✅ |
 | 1.15 | Add `SONARFT_API_TOKEN` startup warning when unset | `sonarft_server.py` | 1 hour | ✅ |
 | 1.16 | Fix 500 errors exposing internal paths (`detail=str(error)`) | `sonarft_server.py` | 30 min | ✅ |
-| 1.17 | Set safe defaults in `config_parameters.json` | `sonarftdata/config_parameters.json` | 15 min | ⬜ |
+| 1.17 | Set safe defaults in `config_parameters.json` | `sonarftdata/config_parameters.json` | 15 min | ✅ |
 
 ---
 
@@ -107,11 +107,11 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 | Phase | Total Tasks | Done | Remaining |
 |---|---|---|---|
 | Phase 0 — Critical Bug Fixes | 5 | 5 | 0 🎉 |
-| Phase 1 — Simulation Ready | 17 | 9 | 8 |
+| Phase 1 — Simulation Ready | 17 | 17 | 0 🎉 |
 | Phase 2 — Paper Trading Ready | 14 | 1 | 13 |
 | Phase 3 — Live Trading Ready | 12 | 0 | 12 |
 | Phase 4 — Production Ready | 11 | 0 | 11 |
-| **Total** | **59** | **15** | **44** |
+| **Total** | **59** | **23** | **36** |
 
 ---
 

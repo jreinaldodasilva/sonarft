@@ -1,9 +1,12 @@
 {
     "parameters_1": [
         {
-            "profit_percentage_threshold": 0.0001,
+            "profit_percentage_threshold": 0.003,
             "trade_amount": 1,
-            "is_simulating_trade": 1
+            "is_simulating_trade": 1,
+            "max_daily_loss": 100.0,
+            "spread_increase_factor": 1.00072,
+            "spread_decrease_factor": 0.99936
         }
     ]
 }

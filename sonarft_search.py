@@ -65,6 +65,7 @@ class TradeExecutor:
         self.logger = logger or logging.getLogger(__name__)
         self.trade_tasks = []
         self.monitor_task = None
+        self._search_ref = None  # set by SonarftSearch after construction
 
     async def start(self):
         """Start the background monitor task. Must be called from an async context."""
@@ -83,7 +84,11 @@ class TradeExecutor:
             self.trade_tasks = [t for t in self.trade_tasks if not t.done()]
             for task in done_tasks:
                 try:
-                    self.logger.info(f"Trade task result: {task.result()}")
+                    result = task.result()
+                    self.logger.info(f"Trade task result: {result}")
+                    # Notify search of trade outcome for daily loss tracking
+                    if self._search_ref is not None and isinstance(result, dict) and 'profit' in result:
+                        self._search_ref.record_trade_result(result['profit'])
                 except Exception as e:
                     self.logger.error(f"Trade task raised an exception: {e}")
             await asyncio.sleep(1)
@@ -140,6 +145,8 @@ class TradeProcessor:
 
             for buy_price_list in buy_prices_list:
                 for sell_price_list in sell_prices_list:
+                    if buy_price_list[0] == sell_price_list[0]:
+                        continue  # skip same-exchange combinations — no arbitrage possible
                     await self.process_trade_combination(
                         botid,
                         base,
@@ -289,6 +296,8 @@ class SonarftSearch:
     async def start(self):
         """Start background tasks. Must be called once from an async context after construction."""
         await self.trade_processor.start()
+        # Wire the daily loss callback so TradeExecutor can notify us of trade results
+        self.trade_processor.trade_executor._search_ref = self
 
     def record_trade_result(self, profit: float):
         """Accumulate profit/loss. Call after each completed trade."""

@@ -76,11 +76,11 @@ No test files exist. `SonarftMath.calculate_trade`, VWAP calculations, spread th
 | 1 | Exchange API keys never loaded | Configuration | **Critical** | Live trading impossible | Prompt 07 |
 | 2 | `trade_position` unbound variable (neutral direction) | Trading Logic | **Critical** | Crash on ~30% of market conditions | Prompt 03 | **✅ Completed** — initialized to `None`, added `else` branch returning `False, False, False` |
 | 3 | Daily loss limit never updated — non-functional | Trading Safety | **Critical** | Unlimited loss exposure | Prompt 08 |
-| 4 | Server binds to `127.0.0.1` — Docker broken | Configuration | **Critical** | Deployment impossible | Prompt 07 |
-| 5 | `acme.json` not in `.gitignore` | Security | **Critical** | TLS private key exposure | Prompt 08 |
+| 4 | Server binds to `127.0.0.1` — Docker broken | Configuration | **Critical** | Deployment impossible | Prompt 07 | **✅ Completed** — bind address now reads `HOST` env var, defaulting to `0.0.0.0`; `PORT` also configurable |
+| 5 | `acme.json` not in `.gitignore` | Security | **Critical** | TLS private key exposure | Prompt 08 | **✅ Completed** — added `acme.json`, `sonarftdata/history/`, `sonarftdata/bots/`, `sonarftdata/config/` to `.gitignore` |
 | 6 | `weighted_adjust_prices` returns 2-tuple on failure | Async/Trading | **High** | ValueError crash per indicator failure | Prompt 02/03 | **✅ Completed** — all early returns changed to 3-tuple `(0, 0, {})`; added zero-price guard in caller (`sonarft_search.py`) |
 | 7 | Medium volatility threshold ÷100 bug | Trading Logic | **High** | ~80% of trades blocked silently | Prompt 03 | **✅ Completed** — thresholds now correctly map `Low→low`, `Medium→medium`, `High→high`; removed `/ 100` |
-| 8 | No same-exchange arbitrage guard | Trading Logic | **High** | Guaranteed loss on single-exchange config | Prompt 03 |
+| 8 | No same-exchange arbitrage guard | Trading Logic | **High** | Guaranteed loss on single-exchange config | Prompt 03 | **✅ Completed** — added `if buy_price_list[0] == sell_price_list[0]: continue` in `process_symbol` |
 | 9 | Unhedged position on sell failure | Exchange Integration | **High** | Open long with no recovery | Prompt 06 |
 | 10 | `cancel_order` not implemented | Exchange Integration | **High** | No trade rollback possible | Prompt 06 |
 | 11 | `order_placed` not checked for `None` | Exchange Integration | **High** | TypeError crash + untracked order | Prompt 06 | **✅ Completed** — added `None` check with error log before accessing `order_placed['id']` |
@@ -90,7 +90,7 @@ No test files exist. `SonarftMath.calculate_trade`, VWAP calculations, spread th
 | 15 | WebSocket disconnect infinite loop | Async | **High** | Dead socket loop on disconnect | Prompt 02 | **✅ Completed** — added `try/except WebSocketDisconnect` in the `while True` loop with `return`; re-raise in `process_received_task` so the outer loop catches it |
 | 16 | `np.mean/std` on empty list → NaN thresholds | Financial Math | **High** | All trades silently blocked | Prompt 04 | **✅ Completed** — added empty-list guard in `calculate_thresholds_based_on_historical_data` returning `{low:0, medium:0, high:0}` |
 | 17 | `bid_prices[0]` IndexError on empty order book | Financial Math | **High** | Crash on empty market | Prompt 04 | **✅ Completed** — added empty list and zero-price guards before accessing `bid_prices[0]` |
-| 18 | Profit threshold 0.01% below break-even | Configuration | **High** | Systematic losses in live trading | Prompt 03 |
+| 18 | Profit threshold 0.01% below break-even | Configuration | **High** | Systematic losses in live trading | Prompt 03 | **✅ Completed** — default changed to `0.003` (0.3%); `max_daily_loss: 100.0` and spread factors now explicit in config |
 | 19 | No API authentication by default | Security | **High** | All endpoints publicly accessible | Prompt 08 | **✅ Completed** — added startup `WARNING` log when `SONARFT_API_TOKEN` is not set; 500 errors now return `"Internal server error"` instead of `str(error)` |
 | 20 | `get_short_term_market_trend` NameError on zero prices | Indicators | **High** | Crash on zero-price data | Prompt 05 | **✅ Completed** — moved zero guard before division; fixed variable name from `previous_avg_price` to `previous_avg_price` (was already correct, guard was just in wrong order) |
 
@@ -174,18 +174,18 @@ No test files exist. `SonarftMath.calculate_trade`, VWAP calculations, spread th
 | 3 | Fix StochRSI positional parameter mismatch | Indicators | 15 min | No (but corrupts signals) | **✅ Completed** |
 | 4 | Fix WebSocket disconnect infinite loop | Async | 30 min | No | **✅ Completed** |
 | 5 | Fix Medium volatility threshold `/ 100` bug | Trading Logic | 15 min | No (but blocks most trades) | **✅ Completed** |
-| 6 | Add `acme.json` + `sonarftdata/` to `.gitignore` | Security | 5 min | No |
-| 7 | Implement exchange API key loading from env vars | Configuration | 2 hours | **Yes** |
-| 8 | Fix server bind address to `0.0.0.0` | Configuration | 5 min | **Yes (Docker)** |
+| 6 | Add `acme.json` + `sonarftdata/` to `.gitignore` | Security | 5 min | No | **✅ Completed** |
+| 7 | Implement exchange API key loading from env vars | Configuration | 2 hours | **Yes** | ⬜ Pending (Phase 2) |
+| 8 | Fix server bind address to `0.0.0.0` | Configuration | 5 min | **Yes (Docker)** | **✅ Completed** |
 | 9 | Add `cancel_order` to `SonarftApiManager` | Exchange | 1 hour | Yes |
 | 10 | Fix `order_placed` None check in `execute_order` | Exchange | 15 min | Yes | **✅ Completed** |
 | 11 | Fix `get_last_price` None check in `monitor_price` | Exchange | 15 min | Yes | **✅ Completed** — added `None` check with `continue` to retry on next poll |
-| 12 | Wire `record_trade_result()` into trade completion | Trading Safety | 1 hour | No (but enables loss limit) |
-| 13 | Add same-exchange arbitrage guard | Trading Logic | 30 min | No (but prevents losses) |
-| 14 | Fix `np.mean/std` on empty list | Financial Math | 30 min | No |
-| 15 | Fix `bid_prices[0]` IndexError | Financial Math | 15 min | No |
-| 16 | Remove double rate limiting | Performance | 30 min | No |
-| 17 | Add order book cache (2s TTL) | Performance | 1 hour | No |
+| 12 | Wire `record_trade_result()` into trade completion | Trading Safety | 1 hour | No (but enables loss limit) | **✅ Completed** — `TradeExecutor._search_ref` wired; `monitor_trade_tasks` calls `record_trade_result` on each completed trade |
+| 13 | Add same-exchange arbitrage guard | Trading Logic | 30 min | No (but prevents losses) | **✅ Completed** |
+| 14 | Fix `np.mean/std` on empty list | Financial Math | 30 min | No | **✅ Completed** |
+| 15 | Fix `bid_prices[0]` IndexError | Financial Math | 15 min | No | **✅ Completed** |
+| 16 | Remove double rate limiting | Performance | 30 min | No | **✅ Completed** — removed manual `wait_for_rate_limit` calls from `call_api_method`; `enableRateLimit=True` handles it |
+| 17 | Add order book cache (2s TTL) | Performance | 1 hour | No | **✅ Completed** — `_order_book_cache` with 2s TTL added to `SonarftApiManager.get_order_book`; also fixed `get_exchange_by_id` to O(1) dict lookup |
 | 18 | Fix `get_short_term_market_trend` NameError | Indicators | 15 min | No | **✅ Completed** |
 | 19 | Add `SONARFT_API_TOKEN` requirement + startup warning | Security | 1 hour | No | **✅ Completed** |
 | 20 | Write unit tests for `calculate_trade` and VWAP | Testing | 4 hours | No (but validates fixes) |

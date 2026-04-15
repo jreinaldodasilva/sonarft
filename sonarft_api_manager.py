@@ -27,11 +27,14 @@ class SonarftApiManager:
         self.exchanges_list = exchanges
         self.exchanges_fees = exchanges_fees
         self.exchanges_instances = self.load_exchanges_instances(self.exchanges_list)
+        self._exchange_map = {ex.id: ex for ex in self.exchanges_instances}
 
         self.exchanges_fees = exchanges_fees
 
         self.markets: Dict[str, dict] = {}
         self._ohlcv_cache: Dict[str, Tuple[float, list]] = {}  # key -> (expires_at, data)
+        self._order_book_cache: Dict[str, Tuple[float, dict]] = {}  # key -> (expires_at, order_book)
+        self._exchange_map: Dict[str, object] = {}  # fast lookup by exchange id
 
     def load_api_library(self):
         """
@@ -62,11 +65,9 @@ class SonarftApiManager:
 
         try:
             if self.__ccxt__:
-                await self.wait_for_rate_limit(exchange)
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(None, lambda: method_call(*args, **kwargs))
             else:
-                await self.wait_for_rate_limit(exchange)
                 result = await method_call(*args, **kwargs)
         except Exception as e:
             self.logger.error(f"Error calling method {method}: {e}")
@@ -186,11 +187,16 @@ class SonarftApiManager:
         return None
 
     async def get_order_book(self, exchange_id: str, base: str, quote: str) -> Dict[str, Union[str, List[List[float]]]]:
-        """
-        Get the order book for the given exchange_id, base and quote.
-        """
+        """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle."""
         symbol = f"{base}/{quote}"
+        cache_key = f"{exchange_id}:{symbol}"
+        now = _time.monotonic()
+        cached = self._order_book_cache.get(cache_key)
+        if cached and now < cached[0]:
+            return cached[1]
         order_book = await self.call_api_method(exchange_id, 'fetch_order_book', 'watch_order_book', symbol)
+        if order_book:
+            self._order_book_cache[cache_key] = (now + 2.0, order_book)
         return order_book
 
     async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> float:
@@ -261,13 +267,8 @@ class SonarftApiManager:
         }
 
     def get_exchange_by_id(self, exchange_id: str):
-        """
-        Get the exchange instance by its ID.
-        """
-        for exchange in self.exchanges_instances:
-            if exchange.id == exchange_id:
-                return exchange
-        return None
+        """Get the exchange instance by its ID (O(1) dict lookup)."""
+        return self._exchange_map.get(exchange_id)
 
     async def get_latest_prices(self, base: str, quote: str, weight) -> List[Tuple[str, float, float, float, str]]:
         """Get the latest prices for the given base and quote across all exchanges."""
@@ -329,5 +330,7 @@ class SonarftApiManager:
     # ###  support methods ***********************************************************************
 
     async def wait_for_rate_limit(self, exchange):
+        """Kept for compatibility but no longer called from call_api_method.
+        ccxt's enableRateLimit=True handles rate limiting internally."""
         rate_limit = exchange.rateLimit / 1000
         await exchange.sleep(rate_limit)
