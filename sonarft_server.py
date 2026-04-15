@@ -7,6 +7,7 @@ import re
 import json
 import logging
 import asyncio
+import urllib.request
 from collections import deque
 from typing import Dict, List, Optional
 from starlette.websockets import WebSocketDisconnect
@@ -16,10 +17,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, WebSocket
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from jwt import PyJWKClient, InvalidTokenError
 
 from sonarft_manager import BotManager
 
 _ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+_logger = logging.getLogger(__name__)
 
 
 def _read_json(path: str) -> dict:
@@ -33,22 +37,75 @@ def _write_json(path: str, data: dict) -> None:
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# Load API token from environment — set SONARFT_API_TOKEN before starting the server.
-# If not set, authentication is disabled (development mode only).
+
+# ### Authentication ###################################################
+#
+# Auth mode is determined by environment variables:
+#
+#   NETLIFY_SITE_URL  — set to your Netlify site URL (e.g. https://sonarft.netlify.app)
+#                       Enables Netlify JWT validation via JWKS.
+#
+#   SONARFT_API_TOKEN — static Bearer token fallback (non-Netlify deployments).
+#
+# If neither is set, auth is disabled (development mode only).
+
+_NETLIFY_SITE_URL: Optional[str] = os.environ.get("NETLIFY_SITE_URL", "").rstrip("/")
 _API_TOKEN: Optional[str] = os.environ.get("SONARFT_API_TOKEN")
-if not _API_TOKEN:
-    logging.getLogger(__name__).warning(
-        "SONARFT_API_TOKEN is not set — all HTTP and WebSocket endpoints are publicly accessible. "
-        "Set this environment variable before deploying to production."
+
+# PyJWKClient caches JWKS keys and refreshes them automatically.
+_jwks_client: Optional[PyJWKClient] = None
+if _NETLIFY_SITE_URL:
+    _jwks_client = PyJWKClient(f"{_NETLIFY_SITE_URL}/.netlify/identity/keys")
+    _logger.info("Netlify JWT auth enabled — JWKS: %s/.netlify/identity/keys", _NETLIFY_SITE_URL)
+elif _API_TOKEN:
+    _logger.info("Static token auth enabled via SONARFT_API_TOKEN.")
+else:
+    _logger.warning(
+        "No auth configured (NETLIFY_SITE_URL and SONARFT_API_TOKEN are both unset). "
+        "All endpoints are publicly accessible. Set one before deploying to production."
     )
+
 _bearer_scheme = HTTPBearer(auto_error=False)
 
-def _require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme)) -> None:
-    """Dependency: reject requests that do not carry the correct Bearer token."""
-    if not _API_TOKEN:
-        return  # auth disabled — no token configured
-    if credentials is None or credentials.credentials != _API_TOKEN:
+
+def _verify_token(token: Optional[str]) -> None:
+    """
+    Validate a Bearer token against the configured auth mode.
+    Raises HTTPException(401) on failure.
+    """
+    # Auth disabled — allow all
+    if not _NETLIFY_SITE_URL and not _API_TOKEN:
+        return
+
+    if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Netlify JWT validation
+    if _jwks_client:
+        try:
+            signing_key = _jwks_client.get_signing_key_from_jwt(token)
+            jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience="netlify",
+                options={"verify_exp": True},
+            )
+            return
+        except InvalidTokenError as e:
+            _logger.warning("JWT validation failed: %s", e)
+            raise HTTPException(status_code=401, detail="Unauthorized") from e
+
+    # Static token fallback
+    if _API_TOKEN and token != _API_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme)) -> None:
+    """FastAPI dependency: validates the Bearer token from the Authorization header."""
+    token = credentials.credentials if credentials else None
+    _verify_token(token)
+
 
 def _validate_id(value: str, label: str = "identifier") -> str:
     """Raise HTTP 400 if value contains path traversal or invalid characters."""
@@ -229,7 +286,9 @@ class SonarftServer:
 
         @self.app.websocket("/ws/{client_id}")
         async def websocket_endpoint(websocket: WebSocket, client_id: str, token: Optional[str] = None):
-            if _API_TOKEN and token != _API_TOKEN:
+            try:
+                _verify_token(token)
+            except HTTPException:
                 await websocket.close(code=1008)  # Policy Violation
                 return
 
