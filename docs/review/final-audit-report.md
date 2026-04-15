@@ -188,7 +188,7 @@ No test files exist. `SonarftMath.calculate_trade`, VWAP calculations, spread th
 | 17 | Add order book cache (2s TTL) | Performance | 1 hour | No | **✅ Completed** — `_order_book_cache` with 2s TTL added to `SonarftApiManager.get_order_book`; also fixed `get_exchange_by_id` to O(1) dict lookup |
 | 18 | Fix `get_short_term_market_trend` NameError | Indicators | 15 min | No | **✅ Completed** |
 | 19 | Add `SONARFT_API_TOKEN` requirement + startup warning | Security | 1 hour | No | **✅ Completed** |
-| 20 | Write unit tests for `calculate_trade` and VWAP | Testing | 4 hours | No (but validates fixes) |
+| 20 | Write unit tests for `calculate_trade` and VWAP | Testing | 4 hours | No (but validates fixes) | **✅ Completed** — `tests/test_sonarft_math.py` (profitability, fees, edge cases, precision, VWAP), `tests/test_sonarft_validators.py` (thresholds, spread gate, liquidity), `tests/test_sonarft_bot.py` (parameter validation, simulation gate, daily loss limit) |
 
 **Total estimated effort for items 1–20: ~14 hours**
 

@@ -60,8 +60,8 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 | 2.10 | Replace `asyncio.get_event_loop()` with `asyncio.get_running_loop()` | `sonarft_api_manager.py`, `sonarft_execution.py` | 30 min | ✅ |
 | 2.11 | Add `deque(maxlen=1000)` to `AsyncHandler.logs` | `sonarft_server.py` | 15 min | ✅ |
 | 2.12 | Add LRU eviction to `_ohlcv_cache` | `sonarft_api_manager.py` | 1 hour | ✅ |
-| 2.13 | Write unit tests for `calculate_trade` and VWAP | `tests/test_sonarft_math.py` | 4 hours | ⬜ |
-| 2.14 | Write unit tests for safety gates and validators | `tests/test_sonarft_validators.py` | 4 hours | ⬜ |
+| 2.13 | Write unit tests for `calculate_trade` and VWAP | `tests/test_sonarft_math.py` | 4 hours | ✅ |
+| 2.14 | Write unit tests for safety gates and validators | `tests/test_sonarft_validators.py` | 4 hours | ✅ |
 
 ---
 
@@ -108,10 +108,10 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 |---|---|---|---|
 | Phase 0 — Critical Bug Fixes | 5 | 5 | 0 🎉 |
 | Phase 1 — Simulation Ready | 17 | 17 | 0 🎉 |
-| Phase 2 — Paper Trading Ready | 14 | 11 | 3 |
+| Phase 2 — Paper Trading Ready | 14 | 14 | 0 🎉 |
 | Phase 3 — Live Trading Ready | 12 | 0 | 12 |
 | Phase 4 — Production Ready | 11 | 0 | 11 |
-| **Total** | **59** | **34** | **25** |
+| **Total** | **59** | **36** | **23** |
 
 ---
 

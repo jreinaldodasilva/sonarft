@@ -6,4 +6,7 @@ pandas-ta
 simple-websocket==1.1.0
 ccxt==4.5.48
 python-decouple==3.8
-
+pytest
+pytest-asyncio
+orjson
+coincurve
