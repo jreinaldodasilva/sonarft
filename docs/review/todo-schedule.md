@@ -70,17 +70,17 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 | # | Task | File(s) | Effort | Status |
 |---|---|---|---|---|
 | 3.1 | Replace sync file I/O with `aiofiles` (server + helpers) | `sonarft_server.py`, `sonarft_helpers.py` | 4 hours | ⬜ |
-| 3.2 | Add max bots per client limit (DoS protection) | `sonarft_server.py` | 1 hour | ⬜ |
-| 3.3 | Add order rate limiting (max N orders/minute per bot) | `sonarft_execution.py` | 2 hours | ⬜ |
-| 3.4 | Add maximum position size parameter | `sonarft_bot.py`, `sonarft_execution.py` | 1 hour | ⬜ |
-| 3.5 | Add minimum order size validation | `sonarft_execution.py` | 1 hour | ⬜ |
-| 3.6 | Add `restart: unless-stopped` + health check to Docker | `Dockerfile`, `docker-compose.yml` | 30 min | ⬜ |
-| 3.7 | Add `PYTHONUNBUFFERED=1` to Dockerfile | `Dockerfile` | 5 min | ⬜ |
-| 3.8 | Call `close_exchange()` on bot shutdown | `sonarft_bot.py` | 30 min | ⬜ |
-| 3.9 | Consolidate 5 config loaders into 1 generic loader | `sonarft_bot.py` | 1 hour | ⬜ |
-| 3.10 | Remove duplicate `BotCreationError` class | `sonarft_manager.py` | 15 min | ⬜ |
-| 3.11 | Write unit tests for indicators (RSI, MACD, StochRSI) | `tests/test_sonarft_indicators.py` | 4 hours | ⬜ |
-| 3.12 | Write integration tests for simulation mode gate | `tests/test_simulation.py` | 2 hours | ⬜ |
+| 3.2 | Add max bots per client limit (DoS protection) | `sonarft_server.py` | 1 hour | ✅ |
+| 3.3 | Add order rate limiting (max N orders/minute per bot) | `sonarft_execution.py` | 2 hours | ✅ |
+| 3.4 | Add maximum position size parameter | `sonarft_bot.py`, `sonarft_execution.py` | 1 hour | ✅ |
+| 3.5 | Add minimum order size validation | `sonarft_execution.py` | 1 hour | ✅ |
+| 3.6 | Add `restart: unless-stopped` + health check to Docker | `Dockerfile`, `docker-compose.yml` | 30 min | ✅ |
+| 3.7 | Add `PYTHONUNBUFFERED=1` to Dockerfile | `Dockerfile` | 5 min | ✅ |
+| 3.8 | Call `close_exchange()` on bot shutdown | `sonarft_bot.py` | 30 min | ✅ |
+| 3.9 | Consolidate 5 config loaders into 1 generic loader | `sonarft_bot.py` | 1 hour | ✅ |
+| 3.10 | Remove duplicate `BotCreationError` class | `sonarft_manager.py` | 15 min | ✅ |
+| 3.11 | Write unit tests for indicators (RSI, MACD, StochRSI) | `tests/test_sonarft_indicators.py` | 4 hours | ✅ |
+| 3.12 | Write integration tests for simulation mode gate | `tests/test_simulation.py` | 2 hours | ✅ |
 
 ---
 
@@ -109,9 +109,9 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 | Phase 0 — Critical Bug Fixes | 5 | 5 | 0 🎉 |
 | Phase 1 — Simulation Ready | 17 | 17 | 0 🎉 |
 | Phase 2 — Paper Trading Ready | 14 | 14 | 0 🎉 |
-| Phase 3 — Live Trading Ready | 12 | 0 | 12 |
+| Phase 3 — Live Trading Ready | 12 | 11 | 1 |
 | Phase 4 — Production Ready | 11 | 0 | 11 |
-| **Total** | **59** | **36** | **23** |
+| **Total** | **59** | **47** | **12** |
 
 ---
 

@@ -29,6 +29,9 @@ services:
 
   sonarft:
     image: sonarft:latest
+    restart: unless-stopped
+    environment:
+      - SONARFT_API_TOKEN=${SONARFT_API_TOKEN}
     volumes:
       - sonarft_history:/app/sonarftdata/history
       - sonarft_bots:/app/sonarftdata/bots

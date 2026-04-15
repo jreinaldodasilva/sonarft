@@ -19,21 +19,49 @@ class SonarftExecution:
                  api_manager: SonarftApiManager,
                  sonarft_helpers: SonarftHelpers,
                  sonarft_indicators: SonarftIndicators,
-                 is_simulation_mode: bool, logger=None):
+                 is_simulation_mode: bool, logger=None,
+                 max_trade_amount: float = 0.0,
+                 max_orders_per_minute: int = 0):
         self.logger = logger or logging.getLogger(__name__)
-
         self.api_manager = api_manager
         self.sonarft_helpers = sonarft_helpers
         self.sonarft_indicators = sonarft_indicators
         self.is_simulation_mode = is_simulation_mode
+        # max_trade_amount: 0 = disabled (no limit)
+        self.max_trade_amount = max_trade_amount
+        # max_orders_per_minute: 0 = disabled
+        self.max_orders_per_minute = max_orders_per_minute
+        self._order_timestamps: list = []  # rolling window for rate limiting
 
     # ### Entry Point for the trade execution ********************************
     async def execute_trade(self, botid, trade: dict) -> bool:
         """
-        Execute the given trade.
+        Execute the given trade, enforcing position size and order rate limits.
         """
         try:
             trade_obj = Trade(**trade)
+
+            # Max position size check (task 3.4)
+            if self.max_trade_amount > 0 and trade_obj.buy_trade_amount > self.max_trade_amount:
+                self.logger.warning(
+                    f"Bot {botid}: trade_amount {trade_obj.buy_trade_amount} exceeds "
+                    f"max_trade_amount {self.max_trade_amount} — skipping"
+                )
+                return False
+
+            # Order rate limiting (task 3.3)
+            if self.max_orders_per_minute > 0:
+                import time as _t
+                now = _t.monotonic()
+                self._order_timestamps = [t for t in self._order_timestamps if now - t < 60]
+                if len(self._order_timestamps) >= self.max_orders_per_minute:
+                    self.logger.warning(
+                        f"Bot {botid}: order rate limit reached "
+                        f"({self.max_orders_per_minute}/min) — skipping"
+                    )
+                    return False
+                self._order_timestamps.append(now)
+
             buy_order_success, sell_order_success, trade_success = await self._execute_single_trade(botid, trade_obj)
         except Exception as e:
             self.logger.error(f"Error executing trade: {e}")
@@ -235,6 +263,13 @@ class SonarftExecution:
         """
         Create an order on the specified exchange.
         """
+        # Minimum order size validation (task 3.5)
+        if trade_amount <= 0 or price <= 0:
+            self.logger.warning(
+                f"Skipping {side} order on {exchange_id}: invalid amount={trade_amount} or price={price}"
+            )
+            return None
+
         self.logger.info(f"Creating {side} order on {exchange_id} for {trade_amount} {base} at {price} {quote}...")
 
         if self.is_simulation_mode:

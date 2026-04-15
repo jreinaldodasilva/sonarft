@@ -1,6 +1,10 @@
 # Use a base image that includes Python and necessary dependencies
 FROM python:3.10.6
 
+# Ensure logs are flushed immediately (no buffering)
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
 # Create a non-root user and group
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
@@ -45,12 +49,16 @@ COPY sonarft_execution.py /app/sonarft_execution.py
 # COPY .env /app/.env
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Switch to non-root user before running
 USER appuser
 
 EXPOSE 5000
+
+# Health check: verify the server is responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/default_parameters')" || exit 1
 
 # Define the command to run the application
 CMD [ "python3", "sonarft.py" ]

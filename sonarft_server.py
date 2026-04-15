@@ -62,6 +62,7 @@ class SonarftServer:
             "remove": "remove_bot",
             "run": "run_bot",
         }
+        self._max_bots_per_client = int(os.environ.get("MAX_BOTS_PER_CLIENT", "5"))
 
         self.app: FastAPI = FastAPI()
 
@@ -293,13 +294,16 @@ class SonarftServer:
 
     async def perform_action(self, action, botid, client_id):
         """
-        Perform required action
-
-        Parameters:
-        client_id
-        action
-        botid
+        Perform required action, enforcing max bots per client limit on create.
         """
+        if action == 'create_bot':
+            current_bots = len(self.botmanager.get_botids(client_id))
+            if current_bots >= self._max_bots_per_client:
+                self.botmanager.logger.warning(
+                    f"Client {client_id} has reached the max bot limit "
+                    f"({self._max_bots_per_client}). Ignoring create request."
+                )
+                return
         action_method = getattr(self.botmanager, action)
         task = asyncio.create_task(action_method(botid or client_id))
 

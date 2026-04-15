@@ -6,7 +6,7 @@ import json
 import random
 import asyncio
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import SonarftHelpers
@@ -185,23 +185,38 @@ class SonarftBot:
 
     async def stop_bot(self):
         """
-        Signals the bot to stop and waits for the run loop to exit cleanly.
+        Signals the bot to stop and closes all exchange WebSocket connections.
         """
         self._stop_event.set()
         self.stop_bot_flag = True
         self.logger.info(f"Bot {self.botid} stop signal sent.")
+        if self.api_manager:
+            for exchange in self.api_manager.exchanges_instances:
+                try:
+                    await self.api_manager.close_exchange(exchange.id)
+                except Exception as e:
+                    self.logger.warning(f"Error closing exchange {exchange.id}: {e}")
 
     # ### loaders *****************************************************
-    def load_configurations(self, config_setup: str = "config_1"):
-        pathname = "sonarftdata/config.json"
+    def _load_config_section(self, pathname: str, key: str):
+        """Generic JSON config loader: opens pathname and returns data[key]."""
         with open(pathname, "r") as f:
-            loadconfig = json.load(f)
-            config = loadconfig[config_setup][0]
+            return json.load(f)[key]
 
-        self.market = self.load_markets(
-            config["markets_pathname"], config["markets_setup"]
+    def load_configurations(self, config_setup: str = "config_1"):
+        config = self._load_config_section("sonarftdata/config.json", config_setup)[0]
+
+        self.market = self._load_config_section(
+            config["markets_pathname"], f"market_{config['markets_setup']}"
         )
+        self.logger.info(f"Market loaded: {self.market}")
 
+        parameters = self._load_config_section(
+            config["parameters_pathname"], f"parameters_{config['parameters_setup']}"
+        )[0]
+        self.logger.info(
+            f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters.items())}"
+        )
         (
             self.profit_percentage_threshold,
             self.trade_amount,
@@ -209,19 +224,30 @@ class SonarftBot:
             self.max_daily_loss,
             self.spread_increase_factor,
             self.spread_decrease_factor,
-        ) = self.load_parameters(
-            config["parameters_pathname"], config["parameters_setup"]
+        ) = (
+            parameters['profit_percentage_threshold'],
+            parameters['trade_amount'],
+            parameters['is_simulating_trade'],
+            parameters.get('max_daily_loss', 0.0),
+            parameters.get('spread_increase_factor', 1.00072),
+            parameters.get('spread_decrease_factor', 0.99936),
         )
+        self.max_trade_amount = parameters.get('max_trade_amount', 0.0)
+        self.max_orders_per_minute = int(parameters.get('max_orders_per_minute', 0))
         self._validate_parameters()
 
-        self.symbols = self.load_symbols(
-            config["symbols_pathname"], config["symbols_setup"]
+        self.symbols = self._load_config_section(
+            config["symbols_pathname"], f"symbols_{config['symbols_setup']}"
         )
-        self.exchanges = self.load_exchanges(
-            config["exchanges_pathname"], config["exchanges_setup"]
+        self.logger.info(f"Symbols loaded: {self.symbols}")
+
+        self.exchanges = self._load_config_section(
+            config["exchanges_pathname"], f"exchanges_{config['exchanges_setup']}"
         )
-        self.exchanges_fees = self.load_fees(
-            config["fees_pathname"], config["fees_setup"]
+        self.logger.info(f"Exchanges loaded: {self.exchanges}")
+
+        self.exchanges_fees = self._load_config_section(
+            config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}"
         )
 
     def _validate_parameters(self):
@@ -238,94 +264,6 @@ class SonarftBot:
             raise ValueError(f"spread_increase_factor must be between 1.0 and 1.01, got {self.spread_increase_factor}")
         if not (0.99 < self.spread_decrease_factor < 1.0):
             raise ValueError(f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}")
-
-    def load_markets(self, markets_pathname: str, markets_setup: str) -> str:
-        """
-        Loads the market data from the specified file.
-        Args:
-            markets_pathname (str): The path to the markets file.
-            markets_setup (str): The market setup to load.
-        Returns:
-            str: The market loaded from the file.
-        """
-        self.logger.info("Loading market...")
-        setup = f"market_{markets_setup}"
-        with open(markets_pathname, "r") as f:
-            market = json.load(f)[setup]
-            self.logger.info(f"Market loaded: {market}")
-        return market
-
-    def load_parameters(self, parameters_pathname: str, parameters_setup: str) -> Tuple:
-        """
-        Loads the parameters data from the specified file.
-        Args:
-            parameters_pathname (str): The path to the parameters file.
-            parameters_setup (str): The parameters setup to load.
-        Returns:
-            tuple: The parameters loaded from the file.
-        """
-        self.logger.info("Loading parameters...")
-        setup = f"parameters_{parameters_setup}"
-        with open(parameters_pathname, "r") as f:
-            parameters = json.load(f)[setup][0]
-
-        self.logger.info(
-            f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters.items())}"
-        )
-        return (
-            parameters['profit_percentage_threshold'],
-            parameters['trade_amount'],
-            parameters['is_simulating_trade'],
-            parameters.get('max_daily_loss', 0.0),
-            parameters.get('spread_increase_factor', 1.00072),
-            parameters.get('spread_decrease_factor', 0.99936),
-        )
-
-    def load_exchanges(self, exchanges_pathname: str, exchanges_setup: str) -> List:
-        """
-        Loads the exchanges data from the specified file.
-        Args:
-            exchanges_pathname (str): The path to the exchanges file.
-            exchanges_setup (str): The exchanges setup to load.
-        Returns:
-            list: The exchanges loaded from the file.
-        """
-        self.logger.info("Loading exchanges...")
-        setup = f"exchanges_{exchanges_setup}"
-        with open(exchanges_pathname, "r") as f:
-            exchanges = json.load(f)[setup]
-            self.logger.info(f"Exchanges loaded: {exchanges}")
-        return exchanges
-
-    def load_symbols(self, symbols_pathname: str, symbols_setup: str) -> List:
-        """
-        Loads the symbols data from the specified file.
-        Args:
-            symbols_pathname (str): The path to the symbols file.
-            symbols_setup (str): The symbols setup to load.
-        Returns:
-            list: The symbols loaded from the file.
-        """
-        self.logger.info("Loading symbols...")
-        setup = f"symbols_{symbols_setup}"
-        with open(symbols_pathname, "r") as f:
-            symbols = json.load(f)[setup]
-            self.logger.info(f"Symbols loaded: {symbols}")
-        return symbols
-
-    def load_fees(self, fees_pathname: str, fees_setup: str) -> Dict:
-        """
-        Loads the fees data from the specified file.
-        Args:
-            fees_pathname (str): The path to the fees file.
-            fees_setup (str): The fees setup to load.
-        Returns:
-            dict: The fees loaded from the file.
-        """
-        setup = f"exchanges_fees_{fees_setup}"
-        with open(fees_pathname, "r") as f:
-            exchanges_fees = json.load(f)[setup]
-        return exchanges_fees
 
     # ### Initialize all modules ***************************************
     async def InitializeModules(self):
@@ -363,6 +301,8 @@ class SonarftBot:
             self.sonarft_indicators,
             self.is_simulating_trade,
             self.logger,
+            max_trade_amount=getattr(self, 'max_trade_amount', 0.0),
+            max_orders_per_minute=getattr(self, 'max_orders_per_minute', 0),
         )
         self.logger.info(f"Initializing Execution module OK")
 

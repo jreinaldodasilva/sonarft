@@ -5,6 +5,8 @@
             "trade_amount": 1,
             "is_simulating_trade": 1,
             "max_daily_loss": 100.0,
+            "max_trade_amount": 0.0,
+            "max_orders_per_minute": 0,
             "spread_increase_factor": 1.00072,
             "spread_decrease_factor": 0.99936
         }

@@ -5,7 +5,7 @@ import asyncio
 import argparse
 from typing import Any
 
-from sonarft_bot import SonarftBot
+from sonarft_bot import SonarftBot, BotCreationError
 
 
 # ### BotManager Class - ##########################################
@@ -189,14 +189,6 @@ class BotManager:
 
         await self.remove_bot_instance(botid)
         self.logger.info("Bot REMOVED!")
-
-
-class BotCreationError(Exception):
-    """Raised when there's an issue during the bot creation process."""
-
-    def __init__(self, message="Failed to create the bot."):
-        self.message = message
-        super().__init__(self.message)
 
 
 class BotRunError(Exception):
