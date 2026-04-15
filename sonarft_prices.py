@@ -66,8 +66,8 @@ class SonarftPrices:
                     self.sonarft_indicators.get_volatility(sell_exchange, base, quote),
                     self.sonarft_indicators.get_order_book(buy_exchange, base, quote),
                     self.sonarft_indicators.get_order_book(sell_exchange, base, quote),
-                    self.sonarft_indicators.get_support_price(sell_exchange, base, quote, 3),
-                    self.sonarft_indicators.get_resistance_price(buy_exchange, base, quote, 3),
+                    self.sonarft_indicators.get_support_price(buy_exchange, base, quote, 3),
+                    self.sonarft_indicators.get_resistance_price(sell_exchange, base, quote, 3),
                 ),
                 timeout=30.0,
             )

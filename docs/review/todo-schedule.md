@@ -48,18 +48,18 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 
 | # | Task | File(s) | Effort | Status |
 |---|---|---|---|---|
-| 2.1 | Implement exchange API key loading from env vars | `sonarft_bot.py`, `sonarft_api_manager.py` | 2 hours | ⬜ |
-| 2.2 | Add `cancel_order` to `SonarftApiManager` | `sonarft_api_manager.py` | 1 hour | ⬜ |
-| 2.3 | Implement trade rollback (cancel buy if sell fails) | `sonarft_execution.py` | 2 hours | ⬜ |
-| 2.4 | Fix `monitor_order` partial fill detection | `sonarft_execution.py` | 1 hour | ⬜ |
-| 2.5 | Fix `get_liquidity` dimensionally incorrect formula | `sonarft_indicators.py` | 30 min | ⬜ |
-| 2.6 | Fix `get_past_performance` inverted index | `sonarft_indicators.py` | 15 min | ⬜ |
-| 2.7 | Fix `get_historical_volume` returns wrong candle | `sonarft_indicators.py` | 15 min | ⬜ |
-| 2.8 | Fix support/resistance exchange swap | `sonarft_prices.py` | 15 min | ⬜ |
-| 2.9 | Fix `market_animal_buy/sell` computed but never used | `sonarft_prices.py` | 15 min | ⬜ |
-| 2.10 | Replace `asyncio.get_event_loop()` with `asyncio.get_running_loop()` | `sonarft_api_manager.py`, `sonarft_execution.py` | 30 min | ⬜ |
+| 2.1 | Implement exchange API key loading from env vars | `sonarft_bot.py`, `sonarft_api_manager.py` | 2 hours | ✅ |
+| 2.2 | Add `cancel_order` to `SonarftApiManager` | `sonarft_api_manager.py` | 1 hour | ✅ |
+| 2.3 | Implement trade rollback (cancel buy if sell fails) | `sonarft_execution.py` | 2 hours | ✅ |
+| 2.4 | Fix `monitor_order` partial fill detection | `sonarft_execution.py` | 1 hour | ✅ |
+| 2.5 | Fix `get_liquidity` dimensionally incorrect formula | `sonarft_indicators.py` | 30 min | ✅ |
+| 2.6 | Fix `get_past_performance` inverted index | `sonarft_indicators.py` | 15 min | ✅ |
+| 2.7 | Fix `get_historical_volume` returns wrong candle | `sonarft_indicators.py` | 15 min | ✅ |
+| 2.8 | Fix support/resistance exchange swap | `sonarft_prices.py` | 15 min | ✅ |
+| 2.9 | Fix `market_animal_buy/sell` computed but never used | `sonarft_prices.py` | 15 min | ✅ |
+| 2.10 | Replace `asyncio.get_event_loop()` with `asyncio.get_running_loop()` | `sonarft_api_manager.py`, `sonarft_execution.py` | 30 min | ✅ |
 | 2.11 | Add `deque(maxlen=1000)` to `AsyncHandler.logs` | `sonarft_server.py` | 15 min | ✅ |
-| 2.12 | Add LRU eviction to `_ohlcv_cache` | `sonarft_api_manager.py` | 1 hour | ⬜ |
+| 2.12 | Add LRU eviction to `_ohlcv_cache` | `sonarft_api_manager.py` | 1 hour | ✅ |
 | 2.13 | Write unit tests for `calculate_trade` and VWAP | `tests/test_sonarft_math.py` | 4 hours | ⬜ |
 | 2.14 | Write unit tests for safety gates and validators | `tests/test_sonarft_validators.py` | 4 hours | ⬜ |
 
@@ -108,10 +108,10 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 |---|---|---|---|
 | Phase 0 — Critical Bug Fixes | 5 | 5 | 0 🎉 |
 | Phase 1 — Simulation Ready | 17 | 17 | 0 🎉 |
-| Phase 2 — Paper Trading Ready | 14 | 1 | 13 |
+| Phase 2 — Paper Trading Ready | 14 | 11 | 3 |
 | Phase 3 — Live Trading Ready | 12 | 0 | 12 |
 | Phase 4 — Production Ready | 11 | 0 | 11 |
-| **Total** | **59** | **23** | **36** |
+| **Total** | **59** | **34** | **25** |
 
 ---
 

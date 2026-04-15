@@ -152,6 +152,20 @@ class SonarftApiManager:
             order = None
         return order
 
+    async def cancel_order(self, exchange_id: str, order_id: str, base: str, quote: str) -> Optional[Dict]:
+        """
+        Cancel an open order on the given exchange.
+        Returns the cancellation result dict, or None on failure.
+        """
+        try:
+            symbol = f"{base}/{quote}"
+            result = await self.call_api_method(exchange_id, 'cancel_order', 'cancel_order', order_id, symbol)
+            self.logger.info(f"Cancelled order {order_id} on {exchange_id}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error cancelling order {order_id} on {exchange_id}: {e}")
+            return None
+
     async def close_exchange(self, exchange_id: str):
         """
         Close exchange instance
@@ -216,7 +230,7 @@ class SonarftApiManager:
         return last_price['last']
 
     async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> List:
-        """Fetch OHLCV history with a per-candle TTL cache."""
+        """Fetch OHLCV history with a per-candle TTL cache (max 500 entries, LRU eviction)."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}:{timeframe}:{limit}"
         ttl = _TIMEFRAME_SECONDS.get(timeframe, 60)
@@ -226,6 +240,10 @@ class SonarftApiManager:
             return cached[1]
         history = await self.call_api_method(exchange_id, 'fetch_ohlcv', 'fetch_ohlcv', symbol, timeframe, since, limit)
         if history:
+            # Evict oldest entry if cache exceeds 500 entries
+            if len(self._ohlcv_cache) >= 500:
+                oldest_key = next(iter(self._ohlcv_cache))
+                del self._ohlcv_cache[oldest_key]
             self._ohlcv_cache[cache_key] = (now + ttl, history)
         return history or []
 

@@ -164,6 +164,13 @@ class SonarftExecution:
         if sell_balance_status:
             result_sell_order = await self.create_order(sell_exchange_id, base, quote, sell_price, actual_sell_amount, 'sell', True)
 
+        if result_sell_order is None:
+            self.logger.error(
+                f"Sell leg failed after buy {buy_order_id} filled — "
+                f"attempting to cancel buy order to avoid unhedged position"
+            )
+            await self.api_manager.cancel_order(buy_exchange_id, buy_order_id, base, quote)
+
         return result_buy_order, result_sell_order
 
     async def execute_short_trade(self, buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price):
@@ -187,6 +194,13 @@ class SonarftExecution:
         buy_balance_status = await self.check_balance(buy_exchange_id, base, quote, 'buy', actual_buy_amount, buy_price)
         if buy_balance_status:
             result_buy_order = await self.create_order(buy_exchange_id, base, quote, buy_price, actual_buy_amount, 'buy', True)
+
+        if result_buy_order is None:
+            self.logger.error(
+                f"Buy leg failed after sell {sell_order_id} filled — "
+                f"attempting to cancel sell order to avoid unhedged position"
+            )
+            await self.api_manager.cancel_order(sell_exchange_id, sell_order_id, base, quote)
 
         return result_buy_order, result_sell_order
 
@@ -250,8 +264,8 @@ class SonarftExecution:
         max_wait_seconds: int = 120,
     ):
         try:
-            deadline = asyncio.get_event_loop().time() + max_wait_seconds
-            while asyncio.get_event_loop().time() < deadline:
+            deadline = asyncio.get_running_loop().time() + max_wait_seconds
+            while asyncio.get_running_loop().time() < deadline:
                 await asyncio.sleep(3)
                 price = await self.api_manager.get_last_price(exchange_id, base, quote)
                 if price is None:
@@ -307,8 +321,8 @@ class SonarftExecution:
         Monitor an order until it is filled, canceled, or the timeout is reached.
         """
         self.logger.info(f"Monitoring {side_order} order: {order_id} at price: {price}")
-        deadline = asyncio.get_event_loop().time() + max_wait_seconds
-        while asyncio.get_event_loop().time() < deadline:
+        deadline = asyncio.get_running_loop().time() + max_wait_seconds
+        while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(1)
             orders = await self.api_manager.watch_orders(exchange_id, base, quote)
 
@@ -323,7 +337,9 @@ class SonarftExecution:
 
             if desired_order['status'] == 'closed':
                 self.logger.info(f"{side_order} order {order_id} executed.")
-                return target_amount, 0
+                filled = desired_order.get('filled', target_amount)
+                remaining = desired_order.get('remaining', 0)
+                return filled if filled > 0 else target_amount, remaining
 
             if desired_order['status'] == 'canceled':
                 self.logger.warning(f"{side_order} order {order_id} was canceled.")

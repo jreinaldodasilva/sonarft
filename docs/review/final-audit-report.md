@@ -73,16 +73,16 @@ No test files exist. `SonarftMath.calculate_trade`, VWAP calculations, spread th
 
 | Rank | Issue | Category | Severity | Financial Impact | Source |
 |---|---|---|---|---|---|
-| 1 | Exchange API keys never loaded | Configuration | **Critical** | Live trading impossible | Prompt 07 |
+| 1 | Exchange API keys never loaded | Configuration | **Critical** | Live trading impossible | Prompt 07 | **✅ Completed** — `_load_api_keys()` reads `{EXCHANGE_UPPER}_API_KEY` / `_SECRET` / `_PASSWORD` env vars for each configured exchange; warns if keys missing in live mode |
 | 2 | `trade_position` unbound variable (neutral direction) | Trading Logic | **Critical** | Crash on ~30% of market conditions | Prompt 03 | **✅ Completed** — initialized to `None`, added `else` branch returning `False, False, False` |
-| 3 | Daily loss limit never updated — non-functional | Trading Safety | **Critical** | Unlimited loss exposure | Prompt 08 |
+| 3 | Daily loss limit never updated — non-functional | Trading Safety | **Critical** | Unlimited loss exposure | Prompt 08 | **✅ Completed** — `record_trade_result()` wired via `TradeExecutor._search_ref` (Phase 1 task 1.9) |
 | 4 | Server binds to `127.0.0.1` — Docker broken | Configuration | **Critical** | Deployment impossible | Prompt 07 | **✅ Completed** — bind address now reads `HOST` env var, defaulting to `0.0.0.0`; `PORT` also configurable |
 | 5 | `acme.json` not in `.gitignore` | Security | **Critical** | TLS private key exposure | Prompt 08 | **✅ Completed** — added `acme.json`, `sonarftdata/history/`, `sonarftdata/bots/`, `sonarftdata/config/` to `.gitignore` |
 | 6 | `weighted_adjust_prices` returns 2-tuple on failure | Async/Trading | **High** | ValueError crash per indicator failure | Prompt 02/03 | **✅ Completed** — all early returns changed to 3-tuple `(0, 0, {})`; added zero-price guard in caller (`sonarft_search.py`) |
 | 7 | Medium volatility threshold ÷100 bug | Trading Logic | **High** | ~80% of trades blocked silently | Prompt 03 | **✅ Completed** — thresholds now correctly map `Low→low`, `Medium→medium`, `High→high`; removed `/ 100` |
 | 8 | No same-exchange arbitrage guard | Trading Logic | **High** | Guaranteed loss on single-exchange config | Prompt 03 | **✅ Completed** — added `if buy_price_list[0] == sell_price_list[0]: continue` in `process_symbol` |
-| 9 | Unhedged position on sell failure | Exchange Integration | **High** | Open long with no recovery | Prompt 06 |
-| 10 | `cancel_order` not implemented | Exchange Integration | **High** | No trade rollback possible | Prompt 06 |
+| 9 | Unhedged position on sell failure | Exchange Integration | **High** | Open long with no recovery | Prompt 06 | **✅ Completed** — `execute_long_trade` and `execute_short_trade` now call `cancel_order` on the first leg if the second leg fails |
+| 10 | `cancel_order` not implemented | Exchange Integration | **High** | No trade rollback possible | Prompt 06 | **✅ Completed** — `cancel_order(exchange_id, order_id, base, quote)` added to `SonarftApiManager` |
 | 11 | `order_placed` not checked for `None` | Exchange Integration | **High** | TypeError crash + untracked order | Prompt 06 | **✅ Completed** — added `None` check with error log before accessing `order_placed['id']` |
 | 12 | StochRSI parameter mismatch (RSI period = 3) | Indicators | **High** | Excessive false signals | Prompt 05 | **✅ Completed** — switched to keyword args: `pta.stochrsi(close, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)` |
 | 13 | `previous_spread` race condition | Async/Indicators | **High** | Incorrect spread rate under concurrency | Prompt 02 | **✅ Completed** — snapshot `previous` before `await`, update immediately after; reduces race window to near-zero |
@@ -175,9 +175,9 @@ No test files exist. `SonarftMath.calculate_trade`, VWAP calculations, spread th
 | 4 | Fix WebSocket disconnect infinite loop | Async | 30 min | No | **✅ Completed** |
 | 5 | Fix Medium volatility threshold `/ 100` bug | Trading Logic | 15 min | No (but blocks most trades) | **✅ Completed** |
 | 6 | Add `acme.json` + `sonarftdata/` to `.gitignore` | Security | 5 min | No | **✅ Completed** |
-| 7 | Implement exchange API key loading from env vars | Configuration | 2 hours | **Yes** | ⬜ Pending (Phase 2) |
+| 7 | Implement exchange API key loading from env vars | Configuration | 2 hours | **Yes** | **✅ Completed** |
 | 8 | Fix server bind address to `0.0.0.0` | Configuration | 5 min | **Yes (Docker)** | **✅ Completed** |
-| 9 | Add `cancel_order` to `SonarftApiManager` | Exchange | 1 hour | Yes |
+| 9 | Add `cancel_order` to `SonarftApiManager` | Exchange | 1 hour | Yes | **✅ Completed** |
 | 10 | Fix `order_placed` None check in `execute_order` | Exchange | 15 min | Yes | **✅ Completed** |
 | 11 | Fix `get_last_price` None check in `monitor_price` | Exchange | 15 min | Yes | **✅ Completed** — added `None` check with `continue` to retry on next poll |
 | 12 | Wire `record_trade_result()` into trade completion | Trading Safety | 1 hour | No (but enables loss limit) | **✅ Completed** — `TradeExecutor._search_ref` wired; `monitor_trade_tasks` calls `record_trade_result` on each completed trade |

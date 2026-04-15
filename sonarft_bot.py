@@ -68,7 +68,7 @@ class SonarftBot:
 
             self.logger.info("Initializing API Manager module OK")
 
-            # await self.api_manager.setAPIKeys(self.botid)
+            self._load_api_keys()
             
             self.logger.info("Initializing Bot modules...")
             await self.InitializeModules()
@@ -131,6 +131,42 @@ class SonarftBot:
                     pass
         except Exception as e:
             self.logger.error(f"Fatal error in run_bot: {e}")
+
+    def _load_api_keys(self):
+        """
+        Load exchange API keys from environment variables.
+
+        For each configured exchange, reads:
+          {EXCHANGE_ID_UPPER}_API_KEY
+          {EXCHANGE_ID_UPPER}_SECRET
+          {EXCHANGE_ID_UPPER}_PASSWORD  (optional, defaults to empty string)
+
+        If no keys are found for any exchange, logs a warning.
+        In simulation mode this is non-blocking — keys are not required.
+        In live mode (is_simulating_trade=0) missing keys will cause order
+        placement to fail with an authentication error from the exchange.
+        """
+        keys_loaded = 0
+        for exchange_id in self.exchanges:
+            prefix = exchange_id.upper()
+            api_key = os.environ.get(f"{prefix}_API_KEY")
+            secret = os.environ.get(f"{prefix}_SECRET")
+            password = os.environ.get(f"{prefix}_PASSWORD", "")
+            if api_key and secret:
+                self.api_manager.setAPIKeys(exchange_id, api_key, secret, password)
+                self.logger.info(f"API keys loaded for exchange: {exchange_id}")
+                keys_loaded += 1
+            else:
+                self.logger.warning(
+                    f"No API keys found for exchange '{exchange_id}'. "
+                    f"Set {prefix}_API_KEY and {prefix}_SECRET environment variables "
+                    f"to enable live trading on this exchange."
+                )
+        if keys_loaded == 0 and not self.is_simulating_trade:
+            self.logger.warning(
+                "No API keys loaded for any exchange and simulation mode is OFF. "
+                "Live order placement will fail with authentication errors."
+            )
 
     def setAPIKeys(self, exchange: str, api_key: str, secret_key: str, password: str):
         """

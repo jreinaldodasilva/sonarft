@@ -297,15 +297,13 @@ class SonarftIndicators:
 
     async def get_historical_volume(self, exchange_id: str, base: str, quote: str, timeframe, limit) -> float:
         """
-
+        Returns the most recent candle's volume for the given exchange and symbol.
         """
-        # If you have a different way to get the volume, please replace this line
         ohlcv = await self.get_history(exchange_id, base, quote, timeframe, limit)
-
-        # Assume OHLCV data format is: [[timestamp, open, high, low, close, volume], ...]
-        volume = ohlcv[0][5]
-
-        return volume
+        if not ohlcv:
+            return 0.0
+        # OHLCV format: [timestamp, open, high, low, close, volume] — index -1 is most recent
+        return ohlcv[-1][5]
 
     async def get_current_volume(self, exchange_id: str, base: str, quote: str, depth: int = 10) -> Tuple[float, float]:
         """
@@ -322,20 +320,29 @@ class SonarftIndicators:
 
     async def get_liquidity(self, exchange_id: str, base: str, quote: str) -> float:
         """
-        Calculate the liquidity for the given exchange and market pair.
-        This is done by summing the volumes in the order book and dividing by the current price.
+        Calculate a normalised liquidity score for the given exchange and market pair.
+        Computed as total order book volume divided by the mid-price, then clamped to [0, 1]
+        relative to a reference volume of 100 units.
         """
         order_book = await self.get_order_book(exchange_id, base, quote)
+        if not order_book:
+            return 0.0
         bids = order_book['bids']
         asks = order_book['asks']
-
-        bid_volume_sum = sum([volume for price, volume in bids])
-        ask_volume_sum = sum([volume for price, volume in asks])
-
-        if not bids or not asks or (bids[0][0] + asks[0][0]) == 0:
+        if not bids or not asks:
             return 0.0
-        liquidity = (bid_volume_sum + ask_volume_sum) / (bids[0][0] + asks[0][0]) / 2
-        normalized_liquidity = min(max(liquidity, 0), 1)  # Normalize to [0, 1]
+
+        mid_price = (bids[0][0] + asks[0][0]) / 2
+        if mid_price == 0:
+            return 0.0
+
+        bid_volume_sum = sum(volume for _, volume in bids)
+        ask_volume_sum = sum(volume for _, volume in asks)
+        total_volume = bid_volume_sum + ask_volume_sum
+
+        # Normalise: 100 units of base currency at mid-price = liquidity score of 1.0
+        reference_volume = 100.0
+        normalized_liquidity = min(total_volume / reference_volume, 1.0)
         return normalized_liquidity
 
     async def get_volatility(self, exchange_id: str, base: str, quote: str) -> float:
@@ -367,24 +374,22 @@ class SonarftIndicators:
     async def get_past_performance(self, exchange: str, base: str, quote: str, lookback_period: int = 24) -> float:
         """
         Calculate the past performance for the given exchange and market pair.
-        This is done by comparing the current price to the price a specified number of periods ago.
+        Compares the most recent close price to the oldest close price in the lookback window.
         """
-
-        # Fetch historical data
         timeframe = "1m"
-        limit = lookback_period
-        historical_data = await self.get_history(exchange, base, quote, timeframe, limit)
+        historical_data = await self.get_history(exchange, base, quote, timeframe, lookback_period)
+        if not historical_data or len(historical_data) < 2:
+            return 0.5  # neutral
 
-        # Assume historical data format is: [[timestamp, open, high, low, close, volume], ...]
-        current_price = historical_data[0][4]
-        past_price = historical_data[-1][4]
+        # OHLCV: index -1 = most recent, index 0 = oldest
+        current_price = historical_data[-1][4]
+        past_price = historical_data[0][4]
 
-        # Calculate performance as percent change from past to current
+        if past_price == 0:
+            return 0.5
+
         performance = (current_price - past_price) / past_price
-
-        # Normalize performances to [0, 1]
         normalized_performance = (performance + 1) / 2
-
         return normalized_performance
 
     # @lru_cache(maxsize=None)
