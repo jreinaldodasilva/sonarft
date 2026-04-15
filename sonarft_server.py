@@ -21,6 +21,18 @@ from sonarft_manager import BotManager
 
 _ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
 
+
+def _read_json(path: str) -> dict:
+    """Synchronous JSON read — intended to run inside asyncio.to_thread."""
+    with open(path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _write_json(path: str, data: dict) -> None:
+    """Synchronous JSON write — intended to run inside asyncio.to_thread."""
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
 # Load API token from environment — set SONARFT_API_TOKEN before starting the server.
 # If not set, authentication is disabled (development mode only).
 _API_TOKEN: Optional[str] = os.environ.get("SONARFT_API_TOKEN")
@@ -93,10 +105,9 @@ class SonarftServer:
         @self.app.get("/default_parameters")
         async def get_default_parameters(_: None = Depends(_require_auth)):
             try:
-                with open(
-                    "sonarftdata/config/parameters.json", "r", encoding="utf-8"
-                ) as read_file:
-                    data = json.load(read_file)
+                data = await asyncio.to_thread(
+                    _read_json, "sonarftdata/config/parameters.json"
+                )
                 return data
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -107,10 +118,9 @@ class SonarftServer:
         @self.app.get("/default_indicators")
         async def get_default_indicators(_: None = Depends(_require_auth)):
             try:
-                with open(
-                    "sonarftdata/config/indicators.json", "r", encoding="utf-8"
-                ) as read_file:
-                    data = json.load(read_file)
+                data = await asyncio.to_thread(
+                    _read_json, "sonarftdata/config/indicators.json"
+                )
                 return data
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -122,10 +132,9 @@ class SonarftServer:
         async def get_bot_parameters(client_id: str, _: None = Depends(_require_auth)):
             _validate_id(client_id, "client_id")
             try:
-                with open(
-                    f"sonarftdata/config/{client_id}_parameters.json", "r", encoding="utf-8"
-                ) as read_file:
-                    data = json.load(read_file)
+                data = await asyncio.to_thread(
+                    _read_json, f"sonarftdata/config/{client_id}_parameters.json"
+                )
                 return data
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -137,8 +146,9 @@ class SonarftServer:
         async def set_bot_parameters(client_id: str, new_parameters: dict = Body(...), _: None = Depends(_require_auth)):
             _validate_id(client_id, "client_id")
             try:
-                with open(f"sonarftdata/config/{client_id}_parameters.json", "w", encoding="utf-8") as write_file:
-                    json.dump(new_parameters, write_file, ensure_ascii=False, indent=4)
+                await asyncio.to_thread(
+                    _write_json, f"sonarftdata/config/{client_id}_parameters.json", new_parameters
+                )
                 return {"message": f"Parameters for client: {client_id} set successfully."}
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -150,10 +160,9 @@ class SonarftServer:
         async def get_bot_indicators(client_id: str, _: None = Depends(_require_auth)):
             _validate_id(client_id, "client_id")
             try:
-                with open(
-                    f"sonarftdata/config/{client_id}_indicators.json", "r", encoding="utf-8"
-                ) as read_file:
-                    data = json.load(read_file)
+                data = await asyncio.to_thread(
+                    _read_json, f"sonarftdata/config/{client_id}_indicators.json"
+                )
                 return data
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -165,8 +174,9 @@ class SonarftServer:
         async def set_bot_indicators(client_id: str, new_indicators: dict = Body(...), _: None = Depends(_require_auth)):
             _validate_id(client_id, "client_id")
             try:
-                with open(f"sonarftdata/config/{client_id}_indicators.json", "w", encoding="utf-8") as write_file:
-                    json.dump(new_indicators, write_file, ensure_ascii=False, indent=4)
+                await asyncio.to_thread(
+                    _write_json, f"sonarftdata/config/{client_id}_indicators.json", new_indicators
+                )
                 return {"message": f"Indicators for client: {client_id} set successfully."}
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -178,10 +188,9 @@ class SonarftServer:
         async def get_bot_orders(botid: str, _: None = Depends(_require_auth)):
             _validate_id(botid, "botid")
             try:
-                with open(
-                    f"sonarftdata/history/{botid}_orders.json", "r", encoding="utf-8"
-                ) as read_file:
-                    data = json.load(read_file)
+                data = await asyncio.to_thread(
+                    _read_json, f"sonarftdata/history/{botid}_orders.json"
+                )
                 return data
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -193,10 +202,9 @@ class SonarftServer:
         async def get_bot_trades(botid: str, _: None = Depends(_require_auth)):
             _validate_id(botid, "botid")
             try:
-                with open(
-                    f"sonarftdata/history/{botid}_trades.json", "r", encoding="utf-8"
-                ) as read_file:
-                    data = json.load(read_file)
+                data = await asyncio.to_thread(
+                    _read_json, f"sonarftdata/history/{botid}_trades.json"
+                )
                 return data
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc

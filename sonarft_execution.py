@@ -158,11 +158,10 @@ class SonarftExecution:
                 return False, False, False
 
             if trade_position:
-                self.sonarft_helpers.save_order_history(botid, trade, trade_position)
-
+                await self.sonarft_helpers.save_order_history(botid, trade, trade_position)
 
             if trade_success:
-                self.sonarft_helpers.save_trade_history(botid, trade, buy_order_id, sell_order_id, trade_position, buy_order_success, sell_order_success, trade_success)
+                await self.sonarft_helpers.save_trade_history(botid, trade, buy_order_id, sell_order_id, trade_position, buy_order_success, sell_order_success, trade_success)
 
             return buy_order_success, sell_order_success, trade_success
         except Exception as e:

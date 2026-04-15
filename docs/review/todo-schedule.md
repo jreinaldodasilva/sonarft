@@ -69,7 +69,7 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 
 | # | Task | File(s) | Effort | Status |
 |---|---|---|---|---|
-| 3.1 | Replace sync file I/O with `aiofiles` (server + helpers) | `sonarft_server.py`, `sonarft_helpers.py` | 4 hours | ⬜ |
+| 3.1 | Replace sync file I/O with `aiofiles` (server + helpers) | `sonarft_server.py`, `sonarft_helpers.py` | 4 hours | ✅ |
 | 3.2 | Add max bots per client limit (DoS protection) | `sonarft_server.py` | 1 hour | ✅ |
 | 3.3 | Add order rate limiting (max N orders/minute per bot) | `sonarft_execution.py` | 2 hours | ✅ |
 | 3.4 | Add maximum position size parameter | `sonarft_bot.py`, `sonarft_execution.py` | 1 hour | ✅ |
@@ -109,9 +109,9 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 | Phase 0 — Critical Bug Fixes | 5 | 5 | 0 🎉 |
 | Phase 1 — Simulation Ready | 17 | 17 | 0 🎉 |
 | Phase 2 — Paper Trading Ready | 14 | 14 | 0 🎉 |
-| Phase 3 — Live Trading Ready | 12 | 11 | 1 |
+| Phase 3 — Live Trading Ready | 12 | 12 | 0 🎉 |
 | Phase 4 — Production Ready | 11 | 0 | 11 |
-| **Total** | **59** | **47** | **12** |
+| **Total** | **59** | **48** | **11** |
 
 ---
 

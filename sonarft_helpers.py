@@ -1,5 +1,12 @@
-# UTILITIES FUNCTIONS ******************************************************
+"""
+SonarFT Helpers Module
+Utility functions, Trade dataclass, and async-safe file persistence.
+
+All file I/O is offloaded to a thread via asyncio.to_thread so the event
+loop is never blocked during history writes.
+"""
 from dataclasses import dataclass
+import asyncio
 import json
 import os
 import logging
@@ -37,52 +44,62 @@ class Trade:
     market_stoch_rsi_sell_k: float = None
     market_stoch_rsi_sell_d: float = None
 
+
 class SonarftHelpers:
     """
     SonarFTHelpers class contains helper functions for the trading bot.
+    All file operations are async-safe via asyncio.to_thread.
     """
 
     def __init__(self, is_simulation_mode: bool, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self.is_simulation_mode = is_simulation_mode
+        # Per-file locks prevent concurrent read-modify-write corruption
+        self._file_locks: dict = {}
 
-    def save_botid(self, botid):
-        """
-        Save botid info to a json file.
-        """
+    def _get_lock(self, file_name: str) -> asyncio.Lock:
+        """Return (creating if needed) a per-file asyncio.Lock."""
+        if file_name not in self._file_locks:
+            self._file_locks[file_name] = asyncio.Lock()
+        return self._file_locks[file_name]
 
-        pathname = botid + ".json"
-        file_name = os.path.join('sonarftdata', 'bots', pathname)
-        data = {"botid": botid}
-        with open(file_name, 'w') as file:
-            json.dump(data, file)
+    # ### Sync helpers (run inside to_thread) ****************************
 
-    def save_order_data(self, pathname, order_info):
-        """
-        Save order info to a json file.
-
-        :param pathname: pathname of the file
-        :param order_info: order info to save
-        """
-
-        file_name = os.path.join('sonarftdata', 'history', pathname)
+    @staticmethod
+    def _append_json(file_name: str, record: dict) -> None:
+        """Read-modify-write a JSON array file. Runs in a thread."""
         if os.path.exists(file_name):
-            with open(file_name, 'r') as file:
-                order_history = json.load(file)
+            with open(file_name, 'r', encoding='utf-8') as f:
+                history = json.load(f)
         else:
-            order_history = []
+            history = []
+        history.append(record)
+        with open(file_name, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=4)
 
-        order_history.append(order_info)
+    @staticmethod
+    def _write_json(file_name: str, data: dict) -> None:
+        """Write a JSON object to a file. Runs in a thread."""
+        with open(file_name, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
 
-        with open(file_name, 'w') as file:
-            json.dump(order_history, file, indent=4)
+    # ### Async public API ***********************************************
 
-        self.logger.info(f"Order: Success")
+    async def save_botid(self, botid):
+        """Save botid info to a json file."""
+        file_name = os.path.join('sonarftdata', 'bots', f"{botid}.json")
+        async with self._get_lock(file_name):
+            await asyncio.to_thread(self._write_json, file_name, {"botid": botid})
 
-    def save_order_history(self, botid, trade: Trade, trade_position):
-        """ 
-        Save trade search info to a json file
-        """
+    async def save_order_data(self, pathname: str, order_info: dict) -> None:
+        """Append order info to a JSON history file (async-safe)."""
+        file_name = os.path.join('sonarftdata', 'history', pathname)
+        async with self._get_lock(file_name):
+            await asyncio.to_thread(self._append_json, file_name, order_info)
+        self.logger.info("Order: Success")
+
+    async def save_order_history(self, botid, trade: Trade, trade_position: str) -> None:
+        """Save trade search info to a json file."""
         t = time.localtime()
         current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
         trade_info = {
@@ -96,7 +113,7 @@ class SonarftHelpers:
             'sell_price': trade.sell_price,
             'buy_trade_amount': trade.buy_trade_amount,
             'sell_trade_amount': trade.sell_trade_amount,
-            'executed_amount': trade.executed_amount, 
+            'executed_amount': trade.executed_amount,
             'buy_value': trade.buy_value,
             'sell_value': trade.sell_value,
             'buy_fee_rate': trade.buy_fee_rate,
@@ -105,38 +122,23 @@ class SonarftHelpers:
             'buy_fee_quote': trade.buy_fee_quote,
             'sell_fee_quote': trade.sell_fee_quote,
             'profit': trade.profit,
-            'profit_percentage': trade.profit_percentage
+            'profit_percentage': trade.profit_percentage,
         }
-        
-        pathname = str(botid) + "_orders.json"
-        self.save_order_data(pathname, trade_info)
-        
-    def save_trade_data(self, pathname, trade_info):
-        """
-        Save trade info to a json file.
+        await self.save_order_data(f"{botid}_orders.json", trade_info)
 
-        :param pathname: pathname of the file
-        :param trade_info: trade info to save
-        """
-
+    async def save_trade_data(self, pathname: str, trade_info: dict) -> None:
+        """Append trade info to a JSON history file (async-safe)."""
         file_name = os.path.join('sonarftdata', 'history', pathname)
-        if os.path.exists(file_name):
-            with open(file_name, 'r') as file:
-                trade_history = json.load(file)
-        else:
-            trade_history = []
+        async with self._get_lock(file_name):
+            await asyncio.to_thread(self._append_json, file_name, trade_info)
+        self.logger.info("Trade: Success")
 
-        trade_history.append(trade_info)
-
-        with open(file_name, 'w') as file:
-            json.dump(trade_history, file, indent=4)
-
-        self.logger.info(f"Trade: Success")
-
-    def save_trade_history(self, botid, trade: Trade, buy_order_id, sell_order_id, trade_position, order_buy_success: bool, order_sell_success: bool, trade_success: bool) -> None:
-        """
-        Save execution trade info to a json file.
-        """
+    async def save_trade_history(
+        self, botid, trade: Trade,
+        buy_order_id, sell_order_id, trade_position,
+        order_buy_success: bool, order_sell_success: bool, trade_success: bool
+    ) -> None:
+        """Save execution trade info to a json file."""
         t = time.localtime()
         current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
         trade_info = {
@@ -164,59 +166,26 @@ class SonarftHelpers:
             'profit_percentage': trade.profit_percentage,
             'order_buy_success': order_buy_success,
             'order_sell_success': order_sell_success,
-            'trade_success': trade_success
+            'trade_success': trade_success,
         }
-        
-        pathname = str(botid) + "_trades.json"
-        self.save_trade_data(pathname, trade_info)
+        await self.save_trade_data(f"{botid}_trades.json", trade_info)
 
-    def save_error(self, error_info):
-        """
-        Save error info to a json file.
+    async def save_error(self, error_info: dict) -> None:
+        """Save error info to a json file."""
+        file_name = os.path.join('sonarftdata', 'errors_history.json')
+        async with self._get_lock(file_name):
+            await asyncio.to_thread(self._append_json, file_name, error_info)
+        self.logger.info(f"Errors info saved to {file_name}")
 
-        :param error_info: error info to save
-        """
-
-        file_name = "errors_history.json"
-        if os.path.exists(file_name):
-            with open(file_name, 'r') as file:
-                trade_errors = json.load(file)
-        else:
-            trade_errors = []
-
-        trade_errors.append(error_info)
-
-        with open(file_name, 'w') as file:
-            json.dump(trade_errors, file, indent=4)
-            self.logger.info(f"Errors info saved to {file_name}")
-
-    def save_balance_data(self, balance_info):
-        """
-        Save balance info to a json file
-        """
-        file_name = "balance_history.json"
-        if os.path.exists(file_name):
-            with open(file_name, 'r') as file:
-                balance_history = json.load(file)
-        else:
-            balance_history = []
-
-        balance_history.append(balance_info)
-
-        with open(file_name, 'w') as file:
-            json.dump(balance_history, file, indent=4)
-
+    async def save_balance_data(self, balance_info: dict) -> None:
+        """Save balance info to a json file."""
+        file_name = os.path.join('sonarftdata', 'balance_history.json')
+        async with self._get_lock(file_name):
+            await asyncio.to_thread(self._append_json, file_name, balance_info)
         self.logger.info(f"Balance info saved to {file_name}")
 
     def percentage_difference(self, value1, value2):
-        """
-        Calculate the percentage difference between two values.
-        """
-        if value1 == 0:
+        """Calculate the percentage difference between two values."""
+        if value1 == 0 or value2 == 0 or value1 == value2:
             return 0
-        if value2 == 0:
-            return 0
-        if value1 == value2:
-            return 0
-
         return abs((value1 - value2) / ((value1 + value2) / 2)) * 100

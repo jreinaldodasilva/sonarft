@@ -53,8 +53,9 @@ class SonarftBot:
 
             self.botid = self.create_botid()
             botid_path = os.path.join("sonarftdata", "bots", f"{self.botid}.json")
-            with open(botid_path, "w") as f:
-                json.dump({"botid": self.botid}, f)
+            await asyncio.to_thread(
+                lambda: json.dump({"botid": self.botid}, open(botid_path, "w"))
+            )
 
             self.logger.info("Initializing Bot manager module...")
 
