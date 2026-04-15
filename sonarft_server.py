@@ -102,6 +102,19 @@ class SonarftServer:
         def get_botids(client_id: str, _: None = Depends(_require_auth)):
             return {"botids": self.botmanager.get_botids(client_id)}
 
+        @self.app.post("/emergency_stop")
+        async def emergency_stop(_: None = Depends(_require_auth)):
+            """Stop all running bots immediately."""
+            stopped = []
+            for client_id, botids in list(self.botmanager._clients.items()):
+                for botid in list(botids):
+                    await self.botmanager.remove_bot(botid)
+                    stopped.append(botid)
+            logging.getLogger(__name__).warning(
+                f"EMERGENCY STOP triggered — stopped {len(stopped)} bot(s): {stopped}"
+            )
+            return {"stopped": stopped, "count": len(stopped)}
+
         @self.app.get("/default_parameters")
         async def get_default_parameters(_: None = Depends(_require_auth)):
             try:
@@ -149,6 +162,8 @@ class SonarftServer:
                 await asyncio.to_thread(
                     _write_json, f"sonarftdata/config/{client_id}_parameters.json", new_parameters
                 )
+                # Hot-reload: apply to all running bots owned by this client
+                await self.botmanager.reload_parameters(client_id, new_parameters)
                 return {"message": f"Parameters for client: {client_id} set successfully."}
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="File not found") from exc
@@ -188,12 +203,9 @@ class SonarftServer:
         async def get_bot_orders(botid: str, _: None = Depends(_require_auth)):
             _validate_id(botid, "botid")
             try:
-                data = await asyncio.to_thread(
-                    _read_json, f"sonarftdata/history/{botid}_orders.json"
-                )
+                from sonarft_helpers import SonarftHelpers
+                data = await SonarftHelpers._async_query('orders', botid)
                 return data
-            except FileNotFoundError as exc:
-                raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
                 logging.getLogger(__name__).error(f"get_bot_orders error: {error}")
                 raise HTTPException(status_code=500, detail="Internal server error") from error
@@ -202,12 +214,9 @@ class SonarftServer:
         async def get_bot_trades(botid: str, _: None = Depends(_require_auth)):
             _validate_id(botid, "botid")
             try:
-                data = await asyncio.to_thread(
-                    _read_json, f"sonarftdata/history/{botid}_trades.json"
-                )
+                from sonarft_helpers import SonarftHelpers
+                data = await SonarftHelpers._async_query('trades', botid)
                 return data
-            except FileNotFoundError as exc:
-                raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
                 logging.getLogger(__name__).error(f"get_bot_trades error: {error}")
                 raise HTTPException(status_code=500, detail="Internal server error") from error

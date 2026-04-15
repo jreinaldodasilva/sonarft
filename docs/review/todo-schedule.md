@@ -88,17 +88,17 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 
 | # | Task | File(s) | Effort | Status |
 |---|---|---|---|---|
-| 4.1 | Replace trade history JSON with SQLite | `sonarft_helpers.py` | 8 hours | ⬜ |
-| 4.2 | Add persistent server-side logging with rotation | `sonarft_server.py` | 4 hours | ⬜ |
-| 4.3 | Add alerting for circuit breaker trips | `sonarft_bot.py` | 4 hours | ⬜ |
-| 4.4 | Add emergency stop endpoint for all bots | `sonarft_server.py`, `sonarft_manager.py` | 2 hours | ⬜ |
-| 4.5 | Add hot-reload for parameter changes | `sonarft_bot.py`, `sonarft_server.py` | 4 hours | ⬜ |
-| 4.6 | Upgrade `pandas` to 2.x | `requirements.txt` | 4 hours | ⬜ |
-| 4.7 | Upgrade `fastapi` to current stable | `requirements.txt` | 2 hours | ⬜ |
-| 4.8 | Remove dead dependencies (`python-dotenv`, `python-decouple`) | `requirements.txt` | 15 min | ⬜ |
-| 4.9 | Wire `config_indicators.json` to actual indicator selection | Multiple files | 8 hours | ⬜ |
-| 4.10 | Add indicator value cache | `sonarft_indicators.py` | 4 hours | ⬜ |
-| 4.11 | Achieve ≥ 80% overall test coverage | `tests/` | 20 hours | ⬜ |
+| 4.1 | Replace trade history JSON with SQLite | `sonarft_helpers.py` | 8 hours | ✅ |
+| 4.2 | Add persistent server-side logging with rotation | `sonarft_server.py` | 4 hours | ✅ |
+| 4.3 | Add alerting for circuit breaker trips | `sonarft_bot.py` | 4 hours | ✅ |
+| 4.4 | Add emergency stop endpoint for all bots | `sonarft_server.py`, `sonarft_manager.py` | 2 hours | ✅ |
+| 4.5 | Add hot-reload for parameter changes | `sonarft_bot.py`, `sonarft_server.py` | 4 hours | ✅ |
+| 4.6 | Upgrade `pandas` to 2.x | `requirements.txt` | 4 hours | ✅ (already 3.0.2) |
+| 4.7 | Upgrade `fastapi` to current stable | `requirements.txt` | 2 hours | ✅ (already 0.135.3) |
+| 4.8 | Remove dead dependencies (`python-dotenv`, `python-decouple`) | `requirements.txt` | 15 min | ✅ |
+| 4.9 | Wire `config_indicators.json` to actual indicator selection | Multiple files | 8 hours | ✅ |
+| 4.10 | Add indicator value cache | `sonarft_indicators.py` | 4 hours | ✅ |
+| 4.11 | Achieve ≥ 80% overall test coverage | `tests/` | 20 hours | ✅ |
 
 ---
 
@@ -110,8 +110,8 @@ Legend: ⬜ Pending | 🔄 In Progress | ✅ Done
 | Phase 1 — Simulation Ready | 17 | 17 | 0 🎉 |
 | Phase 2 — Paper Trading Ready | 14 | 14 | 0 🎉 |
 | Phase 3 — Live Trading Ready | 12 | 12 | 0 🎉 |
-| Phase 4 — Production Ready | 11 | 0 | 11 |
-| **Total** | **59** | **48** | **11** |
+| Phase 4 — Production Ready | 11 | 11 | 0 🎉 |
+| **Total** | **59** | **59** | **0 🎉 ALL DONE** |
 
 ---
 

@@ -3,8 +3,12 @@ import pandas_ta as pta
 import numpy as np
 from typing import Tuple
 import logging
+import time as _time
 
 from sonarft_api_manager import SonarftApiManager
+
+# Indicator cache TTL in seconds (matches 1m OHLCV candle duration)
+_INDICATOR_CACHE_TTL = 60
 
 
 class SonarftIndicators:
@@ -15,6 +19,21 @@ class SonarftIndicators:
         self.spread_rate_threshold = 0.01
         self.price_rate_threshold = 0.01
         self.previous_spread = 1
+        self._indicator_cache: dict = {}  # key -> (expires_at, value)
+
+    def _cached(self, key: str, ttl: float = _INDICATOR_CACHE_TTL):
+        """Return cached value if still valid, else None."""
+        entry = self._indicator_cache.get(key)
+        if entry and _time.monotonic() < entry[0]:
+            return entry[1], True
+        return None, False
+
+    def _cache_set(self, key: str, value, ttl: float = _INDICATOR_CACHE_TTL):
+        """Store value in indicator cache."""
+        if len(self._indicator_cache) >= 500:
+            oldest = next(iter(self._indicator_cache))
+            del self._indicator_cache[oldest]
+        self._indicator_cache[key] = (_time.monotonic() + ttl, value)
 
     def get_profit_factor(self, volatility: float, min_spread: float = 0.99912, max_spread: float = 0.99972) -> float:
         """
@@ -70,6 +89,10 @@ class SonarftIndicators:
 
     async def get_rsi(self, exchange, base, quote, moving_average_period=14, timeframe='1m'):
         """Calculate the Relative Strength Index (RSI)."""
+        cache_key = f"rsi:{exchange}:{base}/{quote}:{moving_average_period}:{timeframe}"
+        cached, hit = self._cached(cache_key)
+        if hit:
+            return cached
         try:
             ohlcv = await self.get_history(exchange, base, quote, timeframe, moving_average_period+2)
             if not ohlcv or len(ohlcv) < moving_average_period:
@@ -80,7 +103,9 @@ class SonarftIndicators:
             if pd.isna(value):
                 self.logger.warning(f"RSI returned NaN for {exchange} {base}/{quote}")
                 return None
-            return float(value)
+            result = float(value)
+            self._cache_set(cache_key, result)
+            return result
         except Exception as e:
             self.logger.error(f"Error get_rsi: {str(e)}")
             return None
@@ -88,6 +113,10 @@ class SonarftIndicators:
 
     async def get_stoch_rsi(self, exchange, base, quote, rsi_period=14, stoch_period=14, k_period=3, d_period=3, timeframe='1m'):
         """Calculate the Stochastic RSI."""
+        cache_key = f"stochrsi:{exchange}:{base}/{quote}:{rsi_period}:{stoch_period}:{k_period}:{d_period}:{timeframe}"
+        cached, hit = self._cached(cache_key)
+        if hit:
+            return cached
         try:
             ohlcv = await self.get_history(exchange, base, quote, timeframe, rsi_period + stoch_period + d_period + 1)
             if not ohlcv or len(ohlcv) < rsi_period + stoch_period:
@@ -101,7 +130,9 @@ class SonarftIndicators:
             if pd.isna(k_val) or pd.isna(d_val):
                 self.logger.warning(f"StochRSI returned NaN for {exchange} {base}/{quote}")
                 return None
-            return float(k_val), float(d_val)
+            result = float(k_val), float(d_val)
+            self._cache_set(cache_key, result)
+            return result
         except Exception as e:
             self.logger.error(f"Error get_stoch_rsi: {str(e)}")
             return None
@@ -109,6 +140,10 @@ class SonarftIndicators:
 
     async def get_market_direction(self, exchange_id, base, quote, ma_type='sma', moving_average_period=14, timeframe='1m'):
         """Get market direction via SMA or EMA."""
+        cache_key = f"direction:{exchange_id}:{base}/{quote}:{ma_type}:{moving_average_period}:{timeframe}"
+        cached, hit = self._cached(cache_key)
+        if hit:
+            return cached
         try:
             history_data = await self.get_history(exchange_id, base, quote, timeframe, moving_average_period+2)
             if not history_data or len(history_data) < moving_average_period:
@@ -126,10 +161,13 @@ class SonarftIndicators:
                 self.logger.warning(f"Market direction MA returned NaN for {exchange_id} {base}/{quote}")
                 return 'neutral'
             if current_price > ma_value:
-                return 'bull'
-            if current_price < ma_value:
-                return 'bear'
-            return 'neutral'
+                result = 'bull'
+            elif current_price < ma_value:
+                result = 'bear'
+            else:
+                result = 'neutral'
+            self._cache_set(cache_key, result)
+            return result
         except Exception as e:
             self.logger.error(f"Error get_market_direction: {str(e)}")
             return None    
@@ -180,6 +218,10 @@ class SonarftIndicators:
 
     async def get_macd(self, exchange, base, quote, short_period=12, long_period=26, signal_period=9, warmup=10):
         """Calculate MACD."""
+        cache_key = f"macd:{exchange}:{base}/{quote}:{short_period}:{long_period}:{signal_period}"
+        cached, hit = self._cached(cache_key)
+        if hit:
+            return cached
         try:
             timeframe = '1m'
             ohlcv = await self.get_history(exchange, base, quote, timeframe, long_period + signal_period + warmup)
@@ -196,7 +238,9 @@ class SonarftIndicators:
             if pd.isna(m) or pd.isna(s) or pd.isna(h):
                 self.logger.warning(f"MACD returned NaN for {exchange} {base}/{quote}")
                 return None
-            return float(m), float(s), float(h)
+            result = float(m), float(s), float(h)
+            self._cache_set(cache_key, result)
+            return result
         except Exception as e:
             self.logger.error(f"Error get_macd: {str(e)}")
             return None

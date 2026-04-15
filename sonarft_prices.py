@@ -16,6 +16,13 @@ class SonarftPrices:
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
         self.sonarft_indicators = sonarft_indicators
+        # active_indicators: list of indicator names from config_indicators.json
+        # e.g. ['rsi', 'stoch rsi', 'macd'] — controls which signals are computed
+        self.active_indicators: list = ['rsi', 'stoch rsi', 'macd']  # default: all on
+
+    def _indicator_active(self, name: str) -> bool:
+        """Return True if the named indicator is in the active set (case-insensitive)."""
+        return any(name.lower() in s.lower() for s in self.active_indicators)
 
     async def weighted_adjust_prices(
         self, botid, buy_exchange: str, sell_exchange, base: str, quote: str,
@@ -75,16 +82,20 @@ class SonarftPrices:
             self.logger.warning(f"weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
             return 0, 0, {}
 
-        # guard None indicators
-        if stoch_buy is None or stoch_sell is None:
+        # guard None indicators — only fail if the indicator is configured
+        if self._indicator_active('stoch rsi') and (stoch_buy is None or stoch_sell is None):
             self.logger.warning(f"StochRSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
-        market_stoch_rsi_buy_k, market_stoch_rsi_buy_d = stoch_buy
-        market_stoch_rsi_sell_k, market_stoch_rsi_sell_d = stoch_sell
+        market_stoch_rsi_buy_k  = stoch_buy[0]  if stoch_buy  else 50.0
+        market_stoch_rsi_buy_d  = stoch_buy[1]  if stoch_buy  else 50.0
+        market_stoch_rsi_sell_k = stoch_sell[0] if stoch_sell else 50.0
+        market_stoch_rsi_sell_d = stoch_sell[1] if stoch_sell else 50.0
 
-        if market_rsi_buy is None or market_rsi_sell is None:
+        if self._indicator_active('rsi') and (market_rsi_buy is None or market_rsi_sell is None):
             self.logger.warning(f"RSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
+        market_rsi_buy  = market_rsi_buy  if market_rsi_buy  is not None else 50.0
+        market_rsi_sell = market_rsi_sell if market_rsi_sell is not None else 50.0
         market_strength = (market_rsi_buy + market_rsi_sell) / 2
 
         # volatility adjustment (these fetch MACD/RSI — also benefits from cache)

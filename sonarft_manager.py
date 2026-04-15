@@ -175,6 +175,22 @@ class BotManager:
             if botid:
                 await self.remove_bot(botid)
 
+    async def reload_parameters(self, client_id: str, new_parameters: dict) -> None:
+        """
+        Hot-reload trading parameters into all running bots owned by client_id.
+        Only safe numeric/flag parameters are applied; exchange/symbol config is not changed.
+        """
+        botids = self.get_botids(client_id)
+        for botid in botids:
+            async with self._lock:
+                bot = self._get_bot_unsafe(botid)
+                if bot:
+                    bot.apply_parameters(new_parameters)
+                    if self.logger:
+                        self.logger.info(
+                            f"Hot-reloaded parameters for bot {botid} (client {client_id})"
+                        )
+
     async def remove_bot(self, botid):
         """
         Removes a bot if it exists.

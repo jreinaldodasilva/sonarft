@@ -1,11 +1,9 @@
 fastapi==0.135.3
 uvicorn[standard]==0.44.0
-python-dotenv==1.2.2
 pandas==3.0.2
 pandas-ta
 simple-websocket==1.1.0
 ccxt==4.5.48
-python-decouple==3.8
 pytest
 pytest-asyncio
 orjson

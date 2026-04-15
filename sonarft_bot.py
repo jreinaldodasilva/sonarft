@@ -105,6 +105,10 @@ class SonarftBot:
                         self.logger.error(
                             f"Bot {self.botid}: circuit breaker tripped after {max_failures} consecutive failures. Stopping."
                         )
+                        await self._send_alert(
+                            f"SonarFT Bot {self.botid}: circuit breaker tripped after "
+                            f"{max_failures} consecutive failures. Last error: {e}"
+                        )
                         self._stop_event.set()
                         break
                     try:
@@ -132,6 +136,65 @@ class SonarftBot:
                     pass
         except Exception as e:
             self.logger.error(f"Fatal error in run_bot: {e}")
+            await self._send_alert(f"SonarFT Bot {self.botid}: fatal error in run_bot: {e}")
+
+    async def _send_alert(self, message: str) -> None:
+        """
+        Send an alert notification.
+        Reads SONARFT_ALERT_WEBHOOK from environment — if set, POSTs the message
+        as JSON to that URL (e.g. a Slack/Discord/Teams incoming webhook).
+        Falls back to a logger.error if no webhook is configured.
+        """
+        webhook_url = os.environ.get("SONARFT_ALERT_WEBHOOK")
+        if not webhook_url:
+            self.logger.error(f"ALERT (no webhook configured): {message}")
+            return
+        try:
+            import urllib.request
+            payload = json.dumps({"text": message}).encode('utf-8')
+            req = urllib.request.Request(
+                webhook_url,
+                data=payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            await asyncio.to_thread(urllib.request.urlopen, req)
+            self.logger.info(f"Alert sent to webhook: {message}")
+        except Exception as e:
+            self.logger.error(f"Failed to send alert: {e} | Original message: {message}")
+
+    def apply_parameters(self, parameters: dict) -> None:
+        """
+        Hot-reload safe trading parameters into the running bot.
+        Only numeric/flag parameters are updated; exchange/symbol config is unchanged.
+        """
+        if 'profit_percentage_threshold' in parameters:
+            self.profit_percentage_threshold = float(parameters['profit_percentage_threshold'])
+        if 'trade_amount' in parameters:
+            self.trade_amount = float(parameters['trade_amount'])
+        if 'is_simulating_trade' in parameters:
+            self.is_simulating_trade = int(parameters['is_simulating_trade'])
+        if 'max_daily_loss' in parameters:
+            self.max_daily_loss = float(parameters.get('max_daily_loss', 0.0))
+        if 'max_trade_amount' in parameters:
+            self.max_trade_amount = float(parameters.get('max_trade_amount', 0.0))
+        if 'max_orders_per_minute' in parameters:
+            self.max_orders_per_minute = int(parameters.get('max_orders_per_minute', 0))
+        # Propagate to live modules
+        if hasattr(self, 'sonarft_search') and self.sonarft_search:
+            self.sonarft_search.trade_amount = self.trade_amount
+            self.sonarft_search.profit_percentage_threshold = self.profit_percentage_threshold
+            self.sonarft_search.max_daily_loss = self.max_daily_loss
+        if hasattr(self, 'sonarft_execution') and self.sonarft_execution:
+            self.sonarft_execution.is_simulation_mode = bool(self.is_simulating_trade)
+            self.sonarft_execution.max_trade_amount = self.max_trade_amount
+            self.sonarft_execution.max_orders_per_minute = self.max_orders_per_minute
+        self.logger.info(
+            f"Bot {self.botid}: parameters hot-reloaded — "
+            f"profit_threshold={self.profit_percentage_threshold}, "
+            f"trade_amount={self.trade_amount}, "
+            f"sim_mode={self.is_simulating_trade}"
+        )
 
     def _load_api_keys(self):
         """
@@ -251,6 +314,11 @@ class SonarftBot:
             config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}"
         )
 
+        self.active_indicators = self._load_config_section(
+            config["indicators_pathname"], f"indicators_{config['indicators_setup']}"
+        )
+        self.logger.info(f"Indicators loaded: {self.active_indicators}")
+
     def _validate_parameters(self):
         """Raise ValueError early if any trading parameter is out of safe range."""
         if not (0 < self.profit_percentage_threshold < 1):
@@ -293,6 +361,7 @@ class SonarftBot:
         )
         self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
         self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
+        self.sonarft_prices.active_indicators = self.active_indicators
         self.logger.info(f"Initializing Prices module OK")
 
         self.logger.info(f"Initializing Execution module...")

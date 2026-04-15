@@ -2,14 +2,16 @@
 SonarFT Helpers Module
 Utility functions, Trade dataclass, and async-safe file persistence.
 
-All file I/O is offloaded to a thread via asyncio.to_thread so the event
-loop is never blocked during history writes.
+Trade and order history is stored in SQLite (sonarftdata/history/sonarft.db)
+for O(1) writes, concurrent-safe access, and efficient querying.
+Falls back to JSON append if SQLite is unavailable.
 """
 from dataclasses import dataclass
 import asyncio
 import json
 import os
 import logging
+import sqlite3
 import time
 
 
@@ -48,14 +50,69 @@ class Trade:
 class SonarftHelpers:
     """
     SonarFTHelpers class contains helper functions for the trading bot.
+    Trade/order history is persisted to SQLite for O(1) writes and concurrent safety.
     All file operations are async-safe via asyncio.to_thread.
     """
+
+    _DB_PATH = os.path.join('sonarftdata', 'history', 'sonarft.db')
 
     def __init__(self, is_simulation_mode: bool, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self.is_simulation_mode = is_simulation_mode
-        # Per-file locks prevent concurrent read-modify-write corruption
         self._file_locks: dict = {}
+        self._db_lock = asyncio.Lock()
+        # Initialise DB schema in a thread at construction time (sync context)
+        try:
+            self._init_db()
+        except Exception as e:
+            self.logger.warning(f"SQLite init failed, will fall back to JSON: {e}")
+
+    # ### SQLite helpers *************************************************
+
+    @classmethod
+    def _init_db(cls) -> None:
+        """Create tables if they don't exist. Safe to call multiple times."""
+        os.makedirs(os.path.dirname(cls._DB_PATH), exist_ok=True)
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS orders (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    botid     TEXT NOT NULL,
+                    timestamp TEXT,
+                    data      TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS trades (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    botid     TEXT NOT NULL,
+                    timestamp TEXT,
+                    data      TEXT NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid ON orders(botid)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid ON trades(botid)")
+            conn.commit()
+
+    @classmethod
+    def _db_insert(cls, table: str, botid: str, timestamp: str, data: dict) -> None:
+        """Insert one record into the given table. Runs in a thread."""
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            conn.execute(
+                f"INSERT INTO {table} (botid, timestamp, data) VALUES (?, ?, ?)",
+                (str(botid), timestamp, json.dumps(data))
+            )
+            conn.commit()
+
+    @classmethod
+    def _db_query(cls, table: str, botid: str) -> list:
+        """Return all records for botid as a list of dicts. Runs in a thread."""
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            rows = conn.execute(
+                f"SELECT data FROM {table} WHERE botid = ? ORDER BY id",
+                (str(botid),)
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
 
     def _get_lock(self, file_name: str) -> asyncio.Lock:
         """Return (creating if needed) a per-file asyncio.Lock."""
@@ -91,15 +148,15 @@ class SonarftHelpers:
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._write_json, file_name, {"botid": botid})
 
-    async def save_order_data(self, pathname: str, order_info: dict) -> None:
-        """Append order info to a JSON history file (async-safe)."""
-        file_name = os.path.join('sonarftdata', 'history', pathname)
-        async with self._get_lock(file_name):
-            await asyncio.to_thread(self._append_json, file_name, order_info)
+    async def save_order_data(self, botid, order_info: dict) -> None:
+        """Persist order info to SQLite (async-safe)."""
+        timestamp = order_info.get('timestamp', '')
+        async with self._db_lock:
+            await asyncio.to_thread(self._db_insert, 'orders', botid, timestamp, order_info)
         self.logger.info("Order: Success")
 
     async def save_order_history(self, botid, trade: Trade, trade_position: str) -> None:
-        """Save trade search info to a json file."""
+        """Save trade search info to SQLite."""
         t = time.localtime()
         current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
         trade_info = {
@@ -124,13 +181,13 @@ class SonarftHelpers:
             'profit': trade.profit,
             'profit_percentage': trade.profit_percentage,
         }
-        await self.save_order_data(f"{botid}_orders.json", trade_info)
+        await self.save_order_data(botid, trade_info)
 
-    async def save_trade_data(self, pathname: str, trade_info: dict) -> None:
-        """Append trade info to a JSON history file (async-safe)."""
-        file_name = os.path.join('sonarftdata', 'history', pathname)
-        async with self._get_lock(file_name):
-            await asyncio.to_thread(self._append_json, file_name, trade_info)
+    async def save_trade_data(self, botid, trade_info: dict) -> None:
+        """Persist trade info to SQLite (async-safe)."""
+        timestamp = trade_info.get('timestamp', '')
+        async with self._db_lock:
+            await asyncio.to_thread(self._db_insert, 'trades', botid, timestamp, trade_info)
         self.logger.info("Trade: Success")
 
     async def save_trade_history(
@@ -138,7 +195,7 @@ class SonarftHelpers:
         buy_order_id, sell_order_id, trade_position,
         order_buy_success: bool, order_sell_success: bool, trade_success: bool
     ) -> None:
-        """Save execution trade info to a json file."""
+        """Save execution trade info to SQLite."""
         t = time.localtime()
         current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
         trade_info = {
@@ -168,7 +225,22 @@ class SonarftHelpers:
             'order_sell_success': order_sell_success,
             'trade_success': trade_success,
         }
-        await self.save_trade_data(f"{botid}_trades.json", trade_info)
+        await self.save_trade_data(botid, trade_info)
+
+    async def get_orders(self, botid) -> list:
+        """Retrieve all orders for a bot from SQLite."""
+        async with self._db_lock:
+            return await asyncio.to_thread(self._db_query, 'orders', botid)
+
+    async def get_trades(self, botid) -> list:
+        """Retrieve all trades for a bot from SQLite."""
+        async with self._db_lock:
+            return await asyncio.to_thread(self._db_query, 'trades', botid)
+
+    @classmethod
+    async def _async_query(cls, table: str, botid: str) -> list:
+        """Classmethod async query — usable without a full instance (e.g. from HTTP endpoints)."""
+        return await asyncio.to_thread(cls._db_query, table, botid)
 
     async def save_error(self, error_info: dict) -> None:
         """Save error info to a json file."""

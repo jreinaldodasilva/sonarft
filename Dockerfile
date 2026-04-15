@@ -16,6 +16,7 @@ RUN mkdir sonarftdata \
     && mkdir sonarftdata/history \
     && mkdir sonarftdata/bots \
     && mkdir sonarftdata/config \
+    && mkdir sonarftdata/logs \
     && chown -R appuser:appgroup /app
 
 # Copy config files into the container
