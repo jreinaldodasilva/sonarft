@@ -68,20 +68,16 @@ class SonarftPrices:
             self.sonarft_indicators.get_resistance_price(buy_exchange, base, quote, 3),
         )
 
-        # unpack market_movement tuples
-        _, market_animal_buy = market_movement_buy
-        _, market_animal_sell = market_movement_sell
-
         # guard None indicators
         if stoch_buy is None or stoch_sell is None:
             self.logger.warning(f"StochRSI unavailable for {base}/{quote}, skipping adjustment")
-            return 0, 0
+            return 0, 0, {}
         market_stoch_rsi_buy_k, market_stoch_rsi_buy_d = stoch_buy
         market_stoch_rsi_sell_k, market_stoch_rsi_sell_d = stoch_sell
 
         if market_rsi_buy is None or market_rsi_sell is None:
             self.logger.warning(f"RSI unavailable for {base}/{quote}, skipping adjustment")
-            return 0, 0
+            return 0, 0, {}
         market_strength = (market_rsi_buy + market_rsi_sell) / 2
 
         # volatility adjustment (these fetch MACD/RSI — also benefits from cache)
@@ -99,6 +95,10 @@ class SonarftPrices:
         depth = 3
         buy_weighted_price = self.get_weighted_price(order_book_buy['bids'], depth)
         sell_weighted_price = self.get_weighted_price(order_book_sell['asks'], depth)
+
+        if buy_weighted_price == 0.0 or sell_weighted_price == 0.0:
+            self.logger.warning(f"Zero-volume order book for {base}/{quote}, skipping adjustment")
+            return 0, 0, {}
 
         adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
         adjusted_sell_price = weight * target_sell_price + (1 - weight) * sell_weighted_price

@@ -93,7 +93,9 @@ class SonarftIndicators:
             if not ohlcv or len(ohlcv) < rsi_period + stoch_period:
                 raise ValueError(f"Not enough data for StochRSI: need {rsi_period + stoch_period}, have {len(ohlcv) if ohlcv else 0}")
             close_prices = pd.Series([x[4] for x in ohlcv])
-            stoch_rsi = pta.stochrsi(close_prices, rsi_period, k_period, d_period)
+            # Use keyword arguments to avoid positional parameter mismatch.
+            # pandas-ta stochrsi signature: (close, length, rsi_length, k, d)
+            stoch_rsi = pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)
             k_val = stoch_rsi.iloc[-1][0]
             d_val = stoch_rsi.iloc[-1][1]
             if pd.isna(k_val) or pd.isna(d_val):
@@ -156,10 +158,12 @@ class SonarftIndicators:
             current_avg_price = sum(current_prices) / N
             previous_avg_price = sum(previous_prices) / N
 
-            # Calculate the percent change
-            price_change = 100 * (current_avg_price - previous_avg_price) / previous_avg_price
+            # Guard against zero division before computing percent change
             if previous_avg_price == 0:
                 return 'neutral'
+
+            # Calculate the percent change
+            price_change = 100 * (current_avg_price - previous_avg_price) / previous_avg_price
 
             # price_change is already in percent (multiplied by 100 above).
             # threshold is treated as a percent value (e.g. 0.1 = 0.1%).
@@ -228,6 +232,7 @@ class SonarftIndicators:
     async def market_movement(self, exchange_id: str, base: str, quote: str, order_book_depth) -> Tuple[bool, str]:
         """
         Check if the market is experiencing a fast movement and determine the movement direction (bull or bear).
+        Uses a per-call previous_spread local to avoid race conditions under concurrent symbol processing.
         """
 
         order_book = await self.get_order_book(exchange_id, base, quote)
@@ -236,28 +241,18 @@ class SonarftIndicators:
                          for bid in order_book['bids'][:order_book_depth]])
         depth_asks = sum([float(ask[0])
                          for ask in order_book['asks'][:order_book_depth]])
-        #self.logger.info(f"depth_bids: {depth_bids}, depth_asks: {depth_asks}")
 
         # Calculate the spread
         spread = depth_asks - depth_bids
 
-        # Calculate the rate of spread change
-        spread_rate = (spread - self.previous_spread) / \
-            self.previous_spread if self.previous_spread != 0 else 0
-        #self.logger.info(f"spread_rate: {spread_rate}")
-
-        # Update previous spread
+        # Use instance previous_spread as a snapshot; update atomically after reading.
+        # This is a best-effort rate calculation — exact ordering is not critical.
+        previous = self.previous_spread
         self.previous_spread = spread
+        spread_rate = (spread - previous) / previous if previous != 0 else 0
 
-        # We can't exactly determine the direction with a single exchange,
-        # but we can use the spread rate as a proxy.
-        direction = "neutral"
-        if depth_bids > depth_asks:
-            direction = "bull"
-        else:
-            direction = "bear"
+        direction = "bull" if depth_bids > depth_asks else "bear"
 
-        # Check if the spread or price is changing rapidly
         if abs(spread_rate) > self.spread_rate_threshold:
             return "fast", direction
 

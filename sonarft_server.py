@@ -24,6 +24,11 @@ _ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
 # Load API token from environment — set SONARFT_API_TOKEN before starting the server.
 # If not set, authentication is disabled (development mode only).
 _API_TOKEN: Optional[str] = os.environ.get("SONARFT_API_TOKEN")
+if not _API_TOKEN:
+    logging.getLogger(__name__).warning(
+        "SONARFT_API_TOKEN is not set — all HTTP and WebSocket endpoints are publicly accessible. "
+        "Set this environment variable before deploying to production."
+    )
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 def _require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme)) -> None:
@@ -93,11 +98,10 @@ class SonarftServer:
                     data = json.load(read_file)
                 return data
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_trades.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"get_default_parameters error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
         @self.app.get("/default_indicators")
         async def get_default_indicators(_: None = Depends(_require_auth)):
@@ -108,11 +112,10 @@ class SonarftServer:
                     data = json.load(read_file)
                 return data
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_trades.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"get_default_indicators error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
         @self.app.get("/bot/get_parameters/{client_id}")
         async def get_bot_parameters(client_id: str, _: None = Depends(_require_auth)):
@@ -124,11 +127,10 @@ class SonarftServer:
                     data = json.load(read_file)
                 return data
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_trades.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"get_bot_parameters error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
         @self.app.post("/bot/set_parameters/{client_id}")
         async def set_bot_parameters(client_id: str, new_parameters: dict = Body(...), _: None = Depends(_require_auth)):
@@ -138,11 +140,10 @@ class SonarftServer:
                     json.dump(new_parameters, write_file, ensure_ascii=False, indent=4)
                 return {"message": f"Parameters for client: {client_id} set successfully."}
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_parameters.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"set_bot_parameters error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
     
         @self.app.get("/bot/get_indicators/{client_id}")
         async def get_bot_indicators(client_id: str, _: None = Depends(_require_auth)):
@@ -154,11 +155,10 @@ class SonarftServer:
                     data = json.load(read_file)
                 return data
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_trades.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"get_bot_indicators error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
         @self.app.post("/bot/set_indicators/{client_id}")
         async def set_bot_indicators(client_id: str, new_indicators: dict = Body(...), _: None = Depends(_require_auth)):
@@ -168,11 +168,10 @@ class SonarftServer:
                     json.dump(new_indicators, write_file, ensure_ascii=False, indent=4)
                 return {"message": f"Indicators for client: {client_id} set successfully."}
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_parameters.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"set_bot_indicators error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
         @self.app.get("/bot/{botid}/orders")
         async def get_bot_orders(botid: str, _: None = Depends(_require_auth)):
@@ -184,11 +183,10 @@ class SonarftServer:
                     data = json.load(read_file)
                 return data
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_orders.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"get_bot_orders error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
         @self.app.get("/bot/{botid}/trades")
         async def get_bot_trades(botid: str, _: None = Depends(_require_auth)):
@@ -200,11 +198,10 @@ class SonarftServer:
                     data = json.load(read_file)
                 return data
             except FileNotFoundError as exc:
-                # self.logger.error(f"File not found: {botid}_trades.json")
                 raise HTTPException(status_code=404, detail="File not found") from exc
             except Exception as error:
-                # self.logger.error(f"An unexpected error occurred: {error}")
-                raise HTTPException(status_code=500, detail=str(error)) from error
+                logging.getLogger(__name__).error(f"get_bot_trades error: {error}")
+                raise HTTPException(status_code=500, detail="Internal server error") from error
 
     # SonarftServer WEBSOCKET Methods
     def setup_ws_endpoints(self):
@@ -236,7 +233,11 @@ class SonarftServer:
             )
 
             while True:
-                await self.process_websocket_tasks(websocket, client_id, log_processor)
+                try:
+                    await self.process_websocket_tasks(websocket, client_id, log_processor)
+                except WebSocketDisconnect:
+                    self.handle_disconnection(client_id, log_processor)
+                    return
 
     async def process_websocket_tasks(self, websocket, client_id, log_processor):
         """
@@ -288,6 +289,7 @@ class SonarftServer:
                 await self.perform_action(action, botid, client_id)
         except WebSocketDisconnect:
             self.handle_disconnection(client_id, log_processor)
+            raise  # re-raise so the outer loop catches it and exits
 
     async def perform_action(self, action, botid, client_id):
         """
@@ -411,7 +413,10 @@ class AsyncHandler(logging.Handler):
         Parameters:
         record (logging.LogRecord): The log record to be put into the queue.
         """
-        self.logs_queue.put_nowait(record)
+        try:
+            self.logs_queue.put_nowait(record)
+        except asyncio.QueueFull:
+            pass  # drop oldest-equivalent: queue is full, discard this record
 
     async def async_emit(self, record: logging.LogRecord, client_id: str) -> None:
         """
@@ -423,7 +428,7 @@ class AsyncHandler(logging.Handler):
         """
         log_message: str = self.format(record)
         if client_id not in self.logs:
-            self.logs[client_id] = deque()
+            self.logs[client_id] = deque(maxlen=1000)
         self.logs[client_id].append(log_message)
 
     async def consume_logs(self, client_id: str) -> None:
@@ -434,8 +439,11 @@ class AsyncHandler(logging.Handler):
         client_id (str): The ID of the client whose logs are to be consumed.
         """
         while True:
-            record: logging.LogRecord = await self.logs_queue.get()
-            await self.async_emit(record, client_id)
+            try:
+                record: logging.LogRecord = await self.logs_queue.get()
+                await self.async_emit(record, client_id)
+            except Exception as e:
+                logging.getLogger(__name__).error(f"consume_logs error for {client_id}: {e}")
 
 
 # ### ClientIdFilter Class ###

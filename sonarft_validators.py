@@ -53,6 +53,15 @@ class SonarftValidators:
 
         bid_prices = [float(bid[0]) for bid in order_book['bids']]
         ask_prices = [float(ask[0]) for ask in order_book['asks']]
+
+        if not bid_prices or not ask_prices:
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Empty order book for {exchange_id}\n")
+            return False
+
+        if bid_prices[0] == 0:
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero bid price for {exchange_id}\n")
+            return False
+
         spread = ask_prices[0] - bid_prices[0]
         if spread / bid_prices[0] > 0.01 and len(bid_prices) < 10 and len(ask_prices) < 10:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Order book is not deep enough for {exchange_id}: {base}/{quote}\n")
@@ -78,13 +87,20 @@ class SonarftValidators:
     def calculate_thresholds_based_on_historical_data(self, historical_data_buy: List, historical_data_sell: List) -> dict:
         combined_data = historical_data_buy + historical_data_sell
 
+        if not combined_data:
+            # Return safe defaults when no historical data is available
+            return {"low": 0.0, "medium": 0.0, "high": 0.0}
+
         historical_bid_prices = [data[1] for data in combined_data]
         historical_ask_prices = [data[2] for data in combined_data]
 
         historical_spreads = [ask_price - bid_price for bid_price, ask_price in zip(historical_bid_prices, historical_ask_prices)]
 
         historical_spread_percentage = [spread / ((ask_price + bid_price) / 2) * 100 for bid_price, ask_price, spread in zip(historical_bid_prices, historical_ask_prices, historical_spreads)]
-       
+
+        if not historical_spread_percentage:
+            return {"low": 0.0, "medium": 0.0, "high": 0.0}
+
         historical_spread_mean = np.mean(historical_spread_percentage)
         historical_spread_std = np.std(historical_spread_percentage)
 
@@ -140,15 +156,15 @@ class SonarftValidators:
 
         if trade_spread_percentage_avg < 0.1:
             spread_threshold = thresholds["low"]
-            self.volatility = "Low"
+            volatility = "Low"
         elif trade_spread_percentage_avg < 0.5:
             spread_threshold = thresholds["medium"]
-            self.volatility = "Medium"
+            volatility = "Medium"
         else:
             spread_threshold = thresholds["high"]
-            self.volatility = "High"
+            volatility = "High"
 
-        return thresholds["low"], thresholds["medium"], thresholds["high"], spread_threshold, self.volatility
+        return thresholds["low"], thresholds["medium"], thresholds["high"], spread_threshold, volatility
 
     async def get_trade_spread_threshold(self, buy_exchange: str, sell_exchange: str, base, quote) -> Tuple[float, float, float, float, str]:
         timeframe = "1m"
@@ -173,9 +189,9 @@ class SonarftValidators:
         low_spread_threshold, medium_spread_threshold, high_spread_threshold, spread_threshold, volatility = await self.get_trade_spread_threshold(buy_exchange, sell_exchange, base, quote)
 
         thresholds = {
-            "Low": medium_spread_threshold,
-            "Medium": medium_spread_threshold / 100,
-            "High": spread_threshold,
+            "Low":    low_spread_threshold,
+            "Medium": medium_spread_threshold,
+            "High":   high_spread_threshold,
         }
 
         try:

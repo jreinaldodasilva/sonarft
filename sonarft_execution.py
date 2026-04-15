@@ -96,6 +96,10 @@ class SonarftExecution:
                     market_stoch_rsi_sell_k, market_stoch_rsi_sell_d = stoch_sell_result
 
 
+            trade_position = None
+            buy_order_id = None
+            sell_order_id = None
+
             #Long or Reverse to Short
             if market_direction_buy == 'bull' and market_direction_sell == 'bull':
                 if market_rsi_buy >= 70 and market_rsi_sell >= 70 and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
@@ -117,6 +121,13 @@ class SonarftExecution:
                     trade_position = 'SHORT'
                     result_buy_order, result_sell_order = await self.execute_short_trade(buy_exchange_id, sell_exchange_id, base, quote, buy_trade_amount, sell_trade_amount, buy_price, sell_price)
                     buy_order_id, sell_order_id, buy_order_success, sell_order_success, trade_success = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
+
+            else:
+                self.logger.warning(
+                    f"Bot {botid}: neutral/mixed market direction "
+                    f"(buy={market_direction_buy}, sell={market_direction_sell}) — skipping trade execution"
+                )
+                return False, False, False
 
             if trade_position:
                 self.sonarft_helpers.save_order_history(botid, trade, trade_position)
@@ -243,6 +254,9 @@ class SonarftExecution:
             while asyncio.get_event_loop().time() < deadline:
                 await asyncio.sleep(3)
                 price = await self.api_manager.get_last_price(exchange_id, base, quote)
+                if price is None:
+                    self.logger.warning(f"get_last_price returned None for {exchange_id} {base}/{quote} — retrying")
+                    continue
                 if side == 'buy' and price_to_check >= price:
                     return price
                 if side == 'sell' and price_to_check <= price:
@@ -258,6 +272,9 @@ class SonarftExecution:
     async def execute_order(self, exchange_id: str, base: str, quote: str, side: str, trade_amount: float, price: float, monitor_order):
         if not self.is_simulation_mode:
             order_placed = await self.api_manager.create_order(exchange_id, base, quote, side, trade_amount, price)
+            if order_placed is None:
+                self.logger.error(f"Order placement returned None for {side} on {exchange_id} — possible untracked order")
+                return None
             order_placed_id = order_placed['id']
             if monitor_order:
                 executed_amount, remaining_amount = await self.monitor_order(exchange_id, order_placed['id'], side, base, quote, trade_amount, price)

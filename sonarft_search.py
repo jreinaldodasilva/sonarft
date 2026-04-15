@@ -182,6 +182,10 @@ class TradeProcessor:
             latest_sell_price,
         )
 
+        if adjusted_buy_price == 0 or adjusted_sell_price == 0:
+            self.logger.warning(f"{base}/{quote}: Price adjustment returned zero — skipping combination")
+            return
+
         # Update the buy and sell lists with the adjusted prices
         buy_price_list = (buy_exchange, adjusted_buy_price, *buy_price_list[2:])
         sell_price_list = (
@@ -203,6 +207,9 @@ class TradeProcessor:
 
         if trade_data is not None:
             trade_data.update(indicators)
+        else:
+            self.logger.warning(f"{base}/{quote}: calculate_trade returned no data — skipping")
+            return
 
         # Information about the trade
         self.logger.info(f"{base}/{quote}: Trade Amount {trade_amount}")
