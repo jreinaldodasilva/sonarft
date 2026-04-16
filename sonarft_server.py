@@ -443,17 +443,85 @@ class SonarftServer:
 
     async def send_logs(self, websocket: WebSocket, client_id: str):
         """
-        Send logs to a client through WebSocket.
+        Send structured JSON events to the client over WebSocket.
+
+        Each message is a JSON object with a 'type' field:
+          {"type": "log", "level": "INFO", "message": "...", "ts": 1234567890}
+
+        Lifecycle events are emitted alongside the log when detected:
+          {"type": "bot_created", "botid": "...", "ts": 1234567890}
+          {"type": "bot_removed", "botid": "...", "ts": 1234567890}
+          {"type": "order_success", "ts": 1234567890}
+          {"type": "trade_success", "ts": 1234567890}
 
         Parameters:
         websocket (WebSocket): The WebSocket connection.
         client_id (str): The ID of the client to send logs to.
         """
+        import time
         handler = logging.getLogger(client_id).handlers[0]
+
+        # Sentinel strings — kept in sync with sonarft_manager / sonarft_bot log output.
+        _BOT_CREATED  = "Bot CREATED!"
+        _BOT_REMOVED  = "Bot REMOVED!"
+        _ORDER_SUCCESS = "Order: Success"
+        _TRADE_SUCCESS = "Trade: Success"
+
         while True:
             if client_id in handler.logs and handler.logs[client_id]:
                 message: str = handler.logs[client_id].popleft()
-                await websocket.send_text(f"{message}")
+                ts = int(time.time())
+
+                # Determine log level from message prefix (e.g. "INFO - client - ...").
+                level = "INFO"
+                if message.startswith("WARNING"):
+                    level = "WARNING"
+                elif message.startswith("ERROR"):
+                    level = "ERROR"
+
+                # Always send the log line.
+                await websocket.send_text(json.dumps({
+                    "type": "log",
+                    "level": level,
+                    "message": message,
+                    "ts": ts,
+                }))
+
+                # Emit structured lifecycle events alongside the log.
+                if _BOT_CREATED in message:
+                    # Extract botid from message if present (format: "Bot <botid> CREATED!").
+                    botid = None
+                    parts = message.split()
+                    if len(parts) >= 2:
+                        botid = parts[1] if parts[1] != "CREATED!" else None
+                    await websocket.send_text(json.dumps({
+                        "type": "bot_created",
+                        "botid": botid,
+                        "ts": ts,
+                    }))
+
+                elif _BOT_REMOVED in message:
+                    botid = None
+                    parts = message.split()
+                    if len(parts) >= 2:
+                        botid = parts[1] if parts[1] != "REMOVED!" else None
+                    await websocket.send_text(json.dumps({
+                        "type": "bot_removed",
+                        "botid": botid,
+                        "ts": ts,
+                    }))
+
+                if _ORDER_SUCCESS in message:
+                    await websocket.send_text(json.dumps({
+                        "type": "order_success",
+                        "ts": ts,
+                    }))
+
+                if _TRADE_SUCCESS in message:
+                    await websocket.send_text(json.dumps({
+                        "type": "trade_success",
+                        "ts": ts,
+                    }))
             else:
                 await asyncio.sleep(1)
 
