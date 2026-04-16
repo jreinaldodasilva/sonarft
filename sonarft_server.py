@@ -130,6 +130,7 @@ class SonarftServer:
             "create": "create_bot",
             "remove": "remove_bot",
             "run": "run_bot",
+            "set_simulation": "set_simulation_mode",
         }
         self._max_bots_per_client = int(os.environ.get("MAX_BOTS_PER_CLIENT", "5"))
 
@@ -363,12 +364,17 @@ class SonarftServer:
             self.botmanager.logger.info(f"client: {client_id} - Botid: {botid} - Action: {action}")
 
             if action:
-                await self.perform_action(action, botid, client_id)
+                # set_simulation passes a value parameter
+                if action == "set_simulation_mode":
+                    value = event.get("value", True)
+                    await self.perform_action(action, botid or client_id, client_id, value=value)
+                else:
+                    await self.perform_action(action, botid, client_id)
         except WebSocketDisconnect:
             self.handle_disconnection(client_id, log_processor)
             raise  # re-raise so the outer loop catches it and exits
 
-    async def perform_action(self, action, botid, client_id):
+    async def perform_action(self, action, botid, client_id, **kwargs):
         """
         Perform required action, enforcing max bots per client limit on create.
         """
@@ -380,8 +386,11 @@ class SonarftServer:
                     f"({self._max_bots_per_client}). Ignoring create request."
                 )
                 return
-        action_method = getattr(self.botmanager, action)
-        task = asyncio.create_task(action_method(botid or client_id))
+        action_method = getattr(self.botmanager, action, None)
+        if not action_method:
+            self.botmanager.logger.warning(f"Unknown action: {action}")
+            return
+        task = asyncio.create_task(action_method(botid or client_id, **kwargs))
 
         if not botid:
             botid = task
